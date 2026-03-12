@@ -64,25 +64,40 @@ export class VideoSpeedController {
     handleWheel = (event) => {
         console.log("滚轮事件未触发？")
         if (!this.isHovering || !this.videoElement) return;
+        event.stopPropagation();
         event.preventDefault();
         const direction = event.deltaY > 0 ? -1 : 1;
         let newRate = this.videoElement.playbackRate + (this.config.step * direction);
         // 限制速率在最小/最大值之间
         newRate = Math.min(Math.max(newRate, this.config.minRate), this.config.maxRate);
-        this.videoElement.playbackRate = Number(newRate.toFixed(2));
+        // 设置新的播放倍速（保留2位小数）
+        const fixedRate = Number(newRate.toFixed(2));
+        this.videoElement.playbackRate = fixedRate;
+        // 更新倍速显示文本（核心补全部分）
+        if (this.textElement) {
+            //document.querySelector('.playback-name').textContent='1.5x';
+            this.textElement.textContent = `${fixedRate}x`; // 格式如：1.50x、0.80x
+        }
     };
 
     // 初始化DOM和事件监听（需先调用initConfig）
-    init(targetSelector, videoSelector = 'video') {
+    init(targetSelector, videoSelector = 'video',textSelector) {
         if (!this.config) {
             throw new Error('请先调用 initConfig() 初始化配置');
         }
 
         this.cleanup(); // 清理旧监听器
 
-        this.targetElement = document.querySelector(targetSelector);
-        console.log("获取当前元素",this.targetElement)
+
+        this.targetElement = document.querySelectorAll(targetSelector)[1];
+        console.log("目标",this.targetElement)
         this.videoElement = document.querySelector(videoSelector);
+
+        //document.querySelector('video[autoplay]').playbackRate=2,并且有autoplay的属性
+        //显示数字的元素
+        if(textSelector!=null){
+            this.textElement = document.querySelector(textSelector);
+        }
 
         if (!this.targetElement || !this.videoElement) {
             setTimeout(() => this.init(targetSelector, videoSelector), 1000);
@@ -91,6 +106,7 @@ export class VideoSpeedController {
 
         // 应用记忆的速率
         if (this.config.rememberSpeed) {
+            console.log("调试：获取配置：",this.config.lastRate)
             this.videoElement.playbackRate = this.config.lastRate;
         }
 

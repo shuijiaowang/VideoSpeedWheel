@@ -4,7 +4,7 @@ import { VideoSpeedController } from "../../core/VideoSpeedController.js";
 // 定义内容脚本：仅注入到B站视频播放页
 export default defineContentScript({
     // 精准匹配B站视频页（支持通配符）https://www.xiaohongshu.com/
-    matches: ['https://www.xiaohongshu.com/*'],
+    matches: ['https://www.douyin.com/*'],
     // 可选：B站是SPA，监听路由变化确保页面切换后仍生效
     runAt: 'document_idle',
     allFrames: false,
@@ -16,12 +16,12 @@ export default defineContentScript({
 
         const controller = new VideoSpeedController({
             // 1. 修复：storageKey必须加local:前缀
-            storageKey: 'local:xiaohongshu_video_speed_config',
+            storageKey: 'local:douyin_video_speed_config',
             // 2. 修复：自定义配置要放在defaultConfig里，覆盖默认值
             defaultConfig: {
                 step: 0.1,
                 minRate: 0.25,
-                maxRate: 16.0,
+                maxRate: 3.0,
                 lastRate: 1.0, // 修复：参数名是lastRate而非defaultRate
                 rememberSpeed: true,
             }
@@ -29,10 +29,9 @@ export default defineContentScript({
 
         // 3. 关键：先异步初始化配置，再初始化DOM
         await controller.initConfig();
-
         // B站专属DOM选择器
         // controller.init('.playback-name', 'video');
-        controller.init('.xgplayer-playbackrate', 'video','.playback-name');
+        controller.init('.xgplayer-setting-playbackRatio', 'video[autoplay]');
 
         // 监听SPA路由变化（页面切换后重新初始化）
         let lastUrl = location.href;
@@ -42,7 +41,7 @@ export default defineContentScript({
                 lastUrl = currentUrl;
                 controller.cleanup();
                 // 延迟初始化，确保DOM加载完成
-                setTimeout(() => controller.init('.xgplayer-playbackrate', 'video'), 500);
+                setTimeout(() => controller.init('.xgplayer-setting-playbackRatio', 'video'), 500);
             }
         });
         observer.observe(document.body, { subtree: true, childList: true });
