@@ -4,7 +4,7 @@ import { VideoSpeedController } from "../../core/VideoSpeedController.js";
 // 定义内容脚本：仅注入到B站视频播放页
 export default defineContentScript({
     // 精准匹配B站视频页（支持通配符）
-    matches: ['https://www.bilibili.com/video/*'],
+    matches: ['https://www.bilibili.com/bangumi/*','https://www.bilibili.com/cheese/*'],
     // 可选：B站是SPA，监听路由变化确保页面切换后仍生效
     runAt: 'document_idle',
     allFrames: false,
@@ -31,7 +31,7 @@ export default defineContentScript({
         await controller.initConfig();
 
         // B站专属DOM选择器
-        controller.init('.bpx-player-ctrl-playbackrate', 'video');
+        controller.init('.bpx-player-ctrl-playbackrate-result', 'video');
 
         // 监听SPA路由变化（页面切换后重新初始化）
         let lastUrl = location.href;
@@ -41,7 +41,7 @@ export default defineContentScript({
                 lastUrl = currentUrl;
                 controller.cleanup();
                 // 延迟初始化，确保DOM加载完成
-                setTimeout(() => controller.init('.bpx-player-ctrl-playbackrate', 'video'), 500);
+                setTimeout(() => controller.init('.bpx-player-ctrl-playbackrate-result', 'video'), 500);
             }
         });
         observer.observe(document.body, { subtree: true, childList: true });

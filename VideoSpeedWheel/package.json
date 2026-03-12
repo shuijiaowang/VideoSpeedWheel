@@ -15,6 +15,7 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "html2canvas": "^1.4.1",
     "vue": "^3.5.29"
   },
   "devDependencies": {
