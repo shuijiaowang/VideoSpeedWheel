@@ -27,9 +27,9 @@ const loadConfig = async () => {
     // 1. 获取浏览器当前激活的标签页（关键！）
     const [activeTab] = await browser.tabs.query({
       active: true, // 激活的标签页
-      currentWindow: true // 当前窗口
+      currentWindow: true // 当前窗口,这个不能省略
     });
-    console.log("执行吗？",activeTab)
+    console.log("执行吗？",activeTab,activeTab.url)
 
 
     // 校验是否获取到标签页
