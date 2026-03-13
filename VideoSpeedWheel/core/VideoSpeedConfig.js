@@ -14,6 +14,7 @@ export const videoSpeedConfigs = [
             videoElement: 'video',
             extraElement: '' // 无则空
         },
+        siteName:"Bilibili",
         // 自定义配置（覆盖默认值）
         defaultConfig: {
             step: 0.1,
@@ -32,6 +33,7 @@ export const videoSpeedConfigs = [
             videoElement: 'video',
             extraElement: '.playback-name'
         },
+        siteName:"XiaoHongShu",
         defaultConfig: {
             step: 0.1,
             minRate: 0.25,
@@ -49,6 +51,7 @@ export const videoSpeedConfigs = [
             videoElement: 'video[autoplay]',
             extraElement: ''
         },
+        siteName:"DouYin",
         defaultConfig: {
             step: 0.1,
             minRate: 0.25,
@@ -68,6 +71,7 @@ export const videoSpeedConfigs = [
             extraElement: '',
             listenElement: '.swiper-slide-active'
         },
+        siteName:"KuaiShou",
         defaultConfig: {
             step: 0.1,
             minRate: 0.25,
@@ -84,6 +88,7 @@ export const videoSpeedConfigs = [
             videoElement: 'video',
             extraElement: '',
         },
+        siteName:"YouTube",
         ui_create_func: createYouTubeSpeedDisplay, //Youtube需要先创建UI
         defaultConfig: {
             step: 0.1,
@@ -96,8 +101,10 @@ export const videoSpeedConfigs = [
 ];
 
 // 辅助函数：根据当前URL匹配对应的配置
-export const getMatchedConfig = () => {
-    const currentUrl = window.location.href;
+export const getMatchedConfig = (currentUrl) => {
+    if(!currentUrl){
+        currentUrl = window.location.href;
+    }
     return videoSpeedConfigs.find(config => {
         return config.matches.some(match => {
             // 简单实现通配符匹配（* 匹配任意字符）

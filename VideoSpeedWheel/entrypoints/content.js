@@ -1,5 +1,6 @@
-import {getMatchedConfig} from "../core/VideoSpeedConfig.js";
+
 import {VideoSpeedController} from "../core/VideoSpeedController.js";
+import {getMatchedConfig} from "../core/VideoSpeedConfig.js";
 
 export default defineContentScript({
     matches: ['<all_urls>'],
