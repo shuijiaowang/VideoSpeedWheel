@@ -1,0 +1,108 @@
+// 所有视频站点的倍速配置表
+import {createYouTubeSpeedDisplay} from "./VideoSpeedUi.js";
+
+export const videoSpeedConfigs = [
+    //B站普通视频/B站番剧/芝士课堂
+    {
+        // 匹配的URL（对应原matches）
+        matches: ['https://www.bilibili.com/bangumi/*', 'https://www.bilibili.com/cheese/*', 'https://www.bilibili.com/video/*'],
+        // 存储key（带local:前缀）
+        storageKey: 'local:bilibili_video_speed_config',
+        // DOM选择器（对应controller.init的参数）
+        selectors: {
+            rateElement: '.bpx-player-ctrl-playbackrate-result',
+            videoElement: 'video',
+            extraElement: '' // 无则空
+        },
+        // 自定义配置（覆盖默认值）
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.25,
+            maxRate: 16.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    },
+    // 小红书
+    {
+        matches: ['https://www.xiaohongshu.com/*'],
+        storageKey: 'local:xiaohongshu_video_speed_config',
+        selectors: {
+            rateElement: '.xgplayer-playbackrate',
+            videoElement: 'video',
+            extraElement: '.playback-name'
+        },
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.25,
+            maxRate: 16.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    },
+    // 抖音
+    {
+        matches: ['https://www.douyin.com/*'],
+        storageKey: 'local:douyin_video_speed_config',
+        selectors: {
+            rateElement: '.xgplayer-playback-setting.slide-show .xgplayer-setting-playbackRatio',
+            videoElement: 'video[autoplay]',
+            extraElement: ''
+        },
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.25,
+            maxRate: 4.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    },
+    //快手
+    {
+        //document.querySelector("swiper-slide-active video").playbackRate
+        matches: ['https://www.kuaishou.com/*'],
+        storageKey: 'local:kuaishou_video_speed_config',
+        selectors: {
+            rateElement: '.swiper-slide-active .speed .speed',
+            videoElement: '.swiper-slide-active video',
+            extraElement: '',
+            listenElement: '.swiper-slide-active'
+        },
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.25,
+            maxRate: 16.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    },
+    {
+        matches: ['https://www.youtube.com/*'],
+        storageKey: 'local:youtube_video_speed_config',
+        selectors: {
+            rateElement: '#custom-speed-display',
+            videoElement: 'video',
+            extraElement: '',
+        },
+        ui_create_func: createYouTubeSpeedDisplay, //Youtube需要先创建UI
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.25,
+            maxRate: 16.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    }
+];
+
+// 辅助函数：根据当前URL匹配对应的配置
+export const getMatchedConfig = () => {
+    const currentUrl = window.location.href;
+    return videoSpeedConfigs.find(config => {
+        return config.matches.some(match => {
+            // 简单实现通配符匹配（* 匹配任意字符）
+            const regex = new RegExp(`^${match.replace(/\*/g, '.*')}$`);
+            return regex.test(currentUrl);
+        });
+    });
+};

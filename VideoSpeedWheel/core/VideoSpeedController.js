@@ -29,7 +29,7 @@ export class VideoSpeedController {
     async initConfig() {
         // 1. 用WXT的defineItem做配置初始化（首次使用自动生成默认值）
         const configItem = storage.defineItem(this.storageKey, {
-            init: () => ({ ...DEFAULT_CONFIG, ...this.defaultConfig }),
+            init: () => ({...DEFAULT_CONFIG, ...this.defaultConfig}),
         });
         // 2. 获取存储的配置（首次是init的默认值，后续是保存的值）
         this.config = await configItem.getValue();
@@ -45,6 +45,7 @@ export class VideoSpeedController {
     handleMouseEnter = () => {
         console.log("调试：鼠标进入处于悬浮状态")
         this.isHovering = true;
+        this.targetElement.style.cursor = `n-resize`;
     };
 
     // 鼠标离开目标元素：保存当前速率
@@ -62,7 +63,7 @@ export class VideoSpeedController {
 
     // 滚轮事件处理
     handleWheel = (event) => {
-        console.log("滚轮事件未触发？")
+        console.log("滚轮事件未触发？", this.videoElement)
         if (!this.isHovering || !this.videoElement) return;
         event.stopPropagation();
         event.preventDefault();
@@ -74,40 +75,46 @@ export class VideoSpeedController {
         const fixedRate = Number(newRate.toFixed(2));
         this.videoElement.playbackRate = fixedRate;
         // 更新倍速显示文本（核心补全部分）
-        if (this.textElement) {
-            //document.querySelector('.playback-name').textContent='1.5x';
-            this.textElement.textContent = `${fixedRate}x`; // 格式如：1.50x、0.80x
-        }
+        console.log("为什么不变？", this.textElement)
+        this.textElement.textContent = `${fixedRate}x`; // 格式如：1.50x、0.80x
+
     };
 
     // 初始化DOM和事件监听（需先调用initConfig）
-    init(targetSelector, videoSelector = 'video',textSelector) {
+    init(targetSelector, videoSelector = 'video', textSelector, listenElement, ui_create_func) {
+        if (typeof ui_create_func === 'function') {
+            ui_create_func(); // 执行函数并保存结果，方便后续复用
+        }
         if (!this.config) {
             throw new Error('请先调用 initConfig() 初始化配置');
         }
-
         this.cleanup(); // 清理旧监听器
-
-
-        this.targetElement = document.querySelectorAll(targetSelector)[1];
-        console.log("目标",this.targetElement)
+        this.targetElement = document.querySelector(targetSelector);
+        console.log("目标", targetSelector, this.targetElement)
         this.videoElement = document.querySelector(videoSelector);
 
-        //document.querySelector('video[autoplay]').playbackRate=2,并且有autoplay的属性
         //显示数字的元素
-        if(textSelector!=null){
+        if (textSelector !== '') {
             this.textElement = document.querySelector(textSelector);
+        } else {
+            this.textElement = this.targetElement
+            console.log("这里没有赋值？", this.textElement, this.targetElement)
         }
-
+        if (listenElement !== '') {
+            this.listen(targetSelector, videoSelector, textSelector, listenElement)
+        }
         if (!this.targetElement || !this.videoElement) {
-            setTimeout(() => this.init(targetSelector, videoSelector), 1000);
+            console.log("重试init")
+            setTimeout(() => this.init(targetSelector, videoSelector, textSelector, listenElement), 1000);
             return;
         }
 
         // 应用记忆的速率
         if (this.config.rememberSpeed) {
-            console.log("调试：获取配置：",this.config.lastRate)
+            console.log("调试：获取配置：", this.config.lastRate)
             this.videoElement.playbackRate = this.config.lastRate;
+            this.textElement.textContent = `${this.config.lastRate}x`
+            console.log("初始化倍速，初始化显示", this.videoElement, this.textElement)
         }
 
         // 绑定事件
@@ -116,9 +123,27 @@ export class VideoSpeedController {
         this.targetElement.addEventListener('wheel', this.handleWheel);
     }
 
+    listen(targetSelector, videoSelector, textSelector, listenElement) {
+        // 2. 监听listenElement的属性变化（核心测试逻辑）
+        const targetElement = document.querySelector(listenElement);
+        if (targetElement) {
+            const attrObserver = new MutationObserver((mutations) => {
+                // 只要属性变化就触发重新绑定
+                console.log(`[测试] listenElement属性变化:`, mutations);
+                this.init(targetSelector, videoSelector, textSelector, listenElement);
+            });
+            // 监听目标元素的所有属性变化
+            attrObserver.observe(targetElement, {attributes: true});
+            console.log(`[测试] 已启动listenElement属性监听: ${listenElement}`);
+        } else {
+            console.warn(`[测试] 未找到listenElement: ${listenElement}`);
+        }
+        //监听某个元素的listenElement的属性值是否发生变化，如果变化了就重新绑定
+    }
+
     // 手动更新配置（比如弹窗调整）
     async updateConfig(newConfig) {
-        this.config = { ...this.config, ...newConfig };
+        this.config = {...this.config, ...newConfig};
         await this.saveConfig();
         // 同步更新视频速率（如果改了lastRate）
         if (this.videoElement && newConfig.lastRate) {
@@ -139,6 +164,6 @@ export class VideoSpeedController {
 
     // 获取当前配置
     getCurrentConfig() {
-        return { ...this.config };
+        return {...this.config};
     }
 }
