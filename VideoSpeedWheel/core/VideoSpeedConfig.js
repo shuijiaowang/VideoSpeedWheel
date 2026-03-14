@@ -55,7 +55,7 @@ export const videoSpeedConfigs = [
         defaultConfig: {
             step: 0.1,
             minRate: 0.25,
-            maxRate: 4.0,
+            maxRate: 3.0, //抖音视频有最大上限超出会被重置
             lastRate: 1.0,
             rememberSpeed: true
         }
