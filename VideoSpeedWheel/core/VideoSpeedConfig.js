@@ -2,6 +2,24 @@
 import {createYouTubeSpeedDisplay} from "./VideoSpeedUi.js";
 
 export const videoSpeedConfigs = [
+    {
+        matches: ['<all_urls>'], // 匹配所有URL（仅在无其他匹配时生效）
+        storageKey: 'local:general_video_speed_config',
+        selectors: {
+            rateElement: '', // 通用模式无触发元素
+            videoElement: 'video', // 匹配所有视频
+            extraElement: '',
+            listenElement: ''
+        },
+        siteName: "General",
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.1,
+            maxRate: 16.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    },
     //B站普通视频/B站番剧/芝士课堂
     {
         // 匹配的URL（对应原matches）
@@ -18,7 +36,7 @@ export const videoSpeedConfigs = [
         // 自定义配置（覆盖默认值）
         defaultConfig: {
             step: 0.1,
-            minRate: 0.25,
+            minRate: 0.1,
             maxRate: 16.0,
             lastRate: 1.0,
             rememberSpeed: true
@@ -36,7 +54,7 @@ export const videoSpeedConfigs = [
         siteName:"XiaoHongShu",
         defaultConfig: {
             step: 0.1,
-            minRate: 0.25,
+            minRate: 0.1,
             maxRate: 16.0,
             lastRate: 1.0,
             rememberSpeed: true
@@ -54,7 +72,7 @@ export const videoSpeedConfigs = [
         siteName:"DouYin",
         defaultConfig: {
             step: 0.1,
-            minRate: 0.25,
+            minRate: 0.1,
             maxRate: 3.0, //抖音视频有最大上限超出会被重置
             lastRate: 1.0,
             rememberSpeed: true
@@ -74,7 +92,7 @@ export const videoSpeedConfigs = [
         siteName:"KuaiShou",
         defaultConfig: {
             step: 0.1,
-            minRate: 0.25,
+            minRate: 0.1,
             maxRate: 16.0,
             lastRate: 1.0,
             rememberSpeed: true
@@ -92,7 +110,7 @@ export const videoSpeedConfigs = [
         ui_create_func: createYouTubeSpeedDisplay, //Youtube需要先创建UI
         defaultConfig: {
             step: 0.1,
-            minRate: 0.25,
+            minRate: 0.1,
             maxRate: 16.0,
             lastRate: 1.0,
             rememberSpeed: true
@@ -105,11 +123,13 @@ export const getMatchedConfig = (currentUrl) => {
     if(!currentUrl){
         currentUrl = window.location.href;
     }
-    return videoSpeedConfigs.find(config => {
+    // 1. 先匹配特定平台（排除通用配置）
+    const specificConfig = videoSpeedConfigs.find(config => {
+        if (config.siteName === "General") return false; // 跳过通用配置
         return config.matches.some(match => {
-            // 简单实现通配符匹配（* 匹配任意字符）
             const regex = new RegExp(`^${match.replace(/\*/g, '.*')}$`);
             return regex.test(currentUrl);
         });
     });
+    return specificConfig || videoSpeedConfigs.find(config => config.siteName === "General");
 };

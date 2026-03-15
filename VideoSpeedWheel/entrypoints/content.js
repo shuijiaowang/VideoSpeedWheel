@@ -10,6 +10,7 @@ export default defineContentScript({
         console.log('鼠标倍速插件');
         const matchedConfig = getMatchedConfig();
         if (!matchedConfig) return;
+        //这里改成，如果没有匹配成功，则绑定网页中所有的视频，并可以通过键盘进行控制
         console.log(`[${matchedConfig.storageKey}] 倍速插件初始化`);
         // 初始化控制器
         const controller = new VideoSpeedController({

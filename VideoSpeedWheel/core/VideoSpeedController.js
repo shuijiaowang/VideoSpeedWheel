@@ -17,14 +17,16 @@ export class VideoSpeedController {
         // 状态管理
         this.targetElement = null; //触发元素
         this.videoElement = null; //视频元素
+        this.videoElements = []; // 通用模式下存储所有视频元素
         this.textElement = null; // 倍速显示元素
         this.config = null; // 最终生效配置
         //鼠标触发状态
-        this.isHovering = false; //是否处于触发状态，此时滚轮可修改倍速
+        this.isHovering = false; //是否处于触发状态，此时滚轮可修改倍速,通用模式下始终为false
         // 键盘输入相关状态
         this.keyInputBuffer = ''; // 存储数字输入缓冲（如"1.25"）
         this.keyInputTimer = null; // 输入延时定时器（防抖）
         this.KEY_INPUT_TIMEOUT = 1500; // 输入超时时间（ms），超时后确认输入
+        this.videoObserver = null; // 监听动态添加的视频
     }
 
     // 初始化配置/从本地读取配置（异步，需先调用这个方法再init DOM）
@@ -41,8 +43,32 @@ export class VideoSpeedController {
     async saveConfig() {
         await storage.setItem(this.storageKey, this.config);
     }
+    getAllVideoElements() {
+        return Array.from(document.querySelectorAll('video'));
+    }
+    // 通用模式：更新所有视频的倍速
+    updateAllVideoSpeed(rate) {
+        if (!this.config) return;
+        // newRate = Math.min(Math.max(newRate, this.config.minRate), this.config.maxRate);
+        // 限制速率范围
+        // const fixedRate = Number(Math.min(Math.max(rate, this.config.minRate), this.config.maxRate).toFixed(2));
+        const fixedRate = Number(Math.min(Math.max(rate, this.config.minRate), this.config.maxRate));
+        // 更新所有视频
+        this.videoElements = this.getAllVideoElements();
+        this.videoElements.forEach(video => {
+            video.playbackRate = fixedRate;
+        });
+        // 保存记忆速率
+        if (this.config.rememberSpeed) {
+            this.config.lastRate = fixedRate;
+            this.saveConfig();
+        }
+        return fixedRate;
+    }
+
     // 鼠标进入目标元素
     handleMouseEnter = async () => {
+        if (this.storageKey.includes('general')) return; // 通用模式跳过
         console.log("调试：鼠标悬浮触发状态") //
         await this.initConfig() //更新参数，可能被popup进行修改，这样就不用通信
         this.isHovering = true; //修改状态
@@ -51,6 +77,7 @@ export class VideoSpeedController {
 
     // 鼠标离开目标元素：保存当前速率
     handleMouseLeave = async () => {
+        if (this.storageKey.includes('general')) return; // 通用模式跳过
         console.log("调试：鼠标离开结束并存储数据")
         this.isHovering = false; //更新状态
         //这里暂时限制为两位数。
@@ -65,6 +92,7 @@ export class VideoSpeedController {
 
     // 滚轮事件处理
     handleWheel = (event) => {
+        if (this.storageKey.includes('general')) return; // 通用模式跳过
         console.log("触发滚轮事件触发")
         if (!this.isHovering || !this.videoElement) return;
         event.stopPropagation();
@@ -97,17 +125,24 @@ export class VideoSpeedController {
 
             const direction = key === 'ArrowUp' ? 1 : -1;
             let newRate = this.videoElement.playbackRate + (this.config.step * direction);
-            // 限制速率范围
-            newRate = Math.min(Math.max(newRate, this.config.minRate), this.config.maxRate);
-            const fixedRate = Number(newRate.toFixed(2));
 
-            // 更新视频倍速和显示
-            this.videoElement.playbackRate = fixedRate;
-            this.textElement.textContent = `${fixedRate}x`;
 
-            // 更新并保存配置
-            this.config.lastRate = fixedRate;
-            this.saveConfig();
+            // 特定平台：单视频调节
+            if (!this.storageKey.includes('general') && this.videoElement) {
+                newRate = this.videoElement.playbackRate + (this.config.step * direction);
+                const fixedRate = this.updateAllVideoSpeed(newRate);
+                this.videoElement.playbackRate = fixedRate;
+                if (this.textElement) {
+                    this.textElement.textContent = `${fixedRate}x`;
+                }
+            }
+            // 通用模式：所有视频调节
+            else if (this.storageKey.includes('general')) {
+                // 使用记忆的速率作为基准
+                newRate = this.config.lastRate + (this.config.step * direction);
+                this.updateAllVideoSpeed(newRate);
+                console.log(`通用模式：倍速调整为 ${newRate.toFixed(2)}x`);
+            }
             return;
         }
 
@@ -134,9 +169,8 @@ export class VideoSpeedController {
 
     // 处理键盘输入的数字缓冲，设置指定倍速（核心新增方法）
     processKeyInputBuffer = () => {
-        if (!this.videoElement || !this.config || !this.keyInputBuffer) return;
+        if (!this.config || !this.keyInputBuffer) return;
 
-        // 转换为数字并验证
         let inputRate = parseFloat(this.keyInputBuffer);
         if (isNaN(inputRate)) {
             console.warn(`无效的倍速输入: ${this.keyInputBuffer}`);
@@ -144,22 +178,22 @@ export class VideoSpeedController {
             return;
         }
 
-        // 限制在最小/最大值之间
-        inputRate = Math.min(Math.max(inputRate, this.config.minRate), this.config.maxRate);
-
-        // 设置倍速并更新显示
-        this.videoElement.playbackRate = inputRate;
-        if (this.textElement) {
-            this.textElement.textContent = `${inputRate}x`;
+        // 特定平台：单视频设置
+        if (!this.storageKey.includes('general') && this.videoElement) {
+            inputRate = Math.min(Math.max(inputRate, this.config.minRate), this.config.maxRate);
+            this.videoElement.playbackRate = inputRate;
+            if (this.textElement) {
+                this.textElement.textContent = `${inputRate}x`;
+            }
+            this.config.lastRate = inputRate;
+            this.saveConfig();
+        }
+        // 通用模式：所有视频设置
+        else if (this.storageKey.includes('general')) {
+            this.updateAllVideoSpeed(inputRate);
+            console.log(`通用模式：设置倍速为 ${inputRate.toFixed(2)}x`);
         }
 
-        // 更新并保存配置
-        this.config.lastRate = inputRate;
-        this.saveConfig();
-
-        console.log(`键盘设置倍速: ${inputRate}x`);
-
-        // 清空缓冲和定时器
         this.keyInputBuffer = '';
         if (this.keyInputTimer) {
             clearTimeout(this.keyInputTimer);
@@ -168,6 +202,21 @@ export class VideoSpeedController {
     };
     // 初始化DOM和事件监听（需先调用initConfig）
     init(targetSelector, videoSelector = 'video', textSelector, listenElement, ui_create_func) {
+        // 通用模式初始化
+        if (this.storageKey.includes('general')) {
+            this.cleanup();
+            // 应用记忆速率到所有视频
+            if (this.config.rememberSpeed) {
+                this.updateAllVideoSpeed(this.config.lastRate);
+            }
+            // 监听动态添加的视频元素
+            this.observeDynamicVideos();
+            // 绑定键盘事件
+            window.addEventListener('keydown', this.handleKeydown);
+            console.log("通用模式初始化完成：监听所有视频，仅支持键盘控制");
+            return;
+        }
+
         if (typeof ui_create_func === 'function') { //如youtube，添加倍速元素
             ui_create_func();
         }
@@ -206,7 +255,30 @@ export class VideoSpeedController {
         //键盘监听，ctrl+alt+键盘如1.25会直接设置视频倍速为1.25
         window.addEventListener('keydown', this.handleKeydown);
     }
-
+// 监听动态添加的视频（通用模式）
+    observeDynamicVideos() {
+        this.videoObserver = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    // 新增视频元素：应用当前倍速
+                    if (node.tagName === 'VIDEO') {
+                        node.playbackRate = this.config.lastRate;
+                    }
+                    // 子节点中有视频：递归处理
+                    else if (node.querySelectorAll) {
+                        node.querySelectorAll('video').forEach(video => {
+                            video.playbackRate = this.config.lastRate;
+                        });
+                    }
+                });
+            });
+        });
+        // 监听整个文档的视频添加
+        this.videoObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
     listen(targetSelector, videoSelector, textSelector, listenElement) {
         // listenElement的属性变化，一般是父级元素状态改为活跃
         const targetElement = document.querySelector(listenElement);
@@ -233,17 +305,20 @@ export class VideoSpeedController {
         }
     }
 
-    // 清理监听器
+    // 清理监听器（适配通用模式）
     cleanup() {
-        // 解绑键盘事件
         window.removeEventListener('keydown', this.handleKeydown);
-
-        // 清空键盘输入相关状态
         if (this.keyInputTimer) {
             clearTimeout(this.keyInputTimer);
             this.keyInputTimer = null;
         }
         this.keyInputBuffer = '';
+        // 清理视频监听
+        if (this.videoObserver) {
+            this.videoObserver.disconnect();
+            this.videoObserver = null;
+        }
+        // 特定平台清理
         if (this.targetElement) {
             this.targetElement.removeEventListener('mouseenter', this.handleMouseEnter);
             this.targetElement.removeEventListener('mouseleave', this.handleMouseLeave);
@@ -252,6 +327,7 @@ export class VideoSpeedController {
         this.targetElement = null;
         this.videoElement = null;
         this.textElement = null;
+        this.videoElements = [];
     }
 
     // 获取当前配置
