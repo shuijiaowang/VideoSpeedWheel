@@ -1,0 +1,49 @@
+# locales/en.yml
+extName: Video Speed Controller (Wheel + Keyboard)
+extDescription: Lightweight and efficient video speed adjustment tool, supports mouse wheel/keyboard shortcuts, multi-platform personalized configuration and speed memory
+
+ok: OK
+# Popup site info
+siteInfo:
+  currentSite: Current Site
+  noSupport: ⚠️ This page is not a supported video site, configuration will not take effect
+
+# Config panel
+configPanel:
+  title: Custom Video Speed Configuration
+
+# Form items
+form:
+  step:
+    label: Wheel Adjustment Step
+    placeholder: 0.1
+    tip: Speed change per mouse scroll (recommended 0.05-0.5)
+  minRate:
+    label: Minimum Playback Speed
+    placeholder: 0.25
+  maxRate:
+    label: Maximum Playback Speed
+    placeholder: 16.0
+  rememberSpeed:
+    label: Enable Speed Memory
+  lastRate:
+    label: Default Remembered Speed
+    placeholder: 1.0
+
+# Button text
+button:
+  save: Save Configuration
+  reset: Reset to Default
+
+# Prompt messages
+message:
+  loadSuccess: Loaded configuration for 【{site}】
+  saveSuccess: Configuration for 【{site}】 saved successfully!
+  saveFail: Failed to save configuration
+  loadFail: Failed to load configuration
+  noTabUrl: Failed to get current tab URL
+  noSupportSave: This site does not support configuration saving
+  minGtMax: Minimum speed cannot be greater than or equal to maximum speed
+  stepInvalid: Adjustment step must be greater than 0
+  lastRateRange: Remembered speed must be between {min} and {max}
+  noMatchedSite: This page is not a supported video site, configuration will not take effect

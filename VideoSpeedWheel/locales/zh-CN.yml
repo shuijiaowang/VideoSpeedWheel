@@ -1,0 +1,48 @@
+# locales/zh-CN.yml
+extName: 视频倍速调节（滚轮+键盘）
+extDescription: 轻量高效的视频倍速调节工具，支持鼠标滚轮/键盘快捷键，多平台个性化配置与速率记忆
+ok: OOk
+# 弹窗站点信息
+siteInfo:
+  currentSite: 当前站点
+  noSupport: ⚠️ 此页面不是支持的视频站点，配置无法生效
+
+# 配置面板
+configPanel:
+  title: 视频倍速自定义配置
+
+# 表单项
+form:
+  step:
+    label: 滚轮调节步长
+    placeholder: 0.1
+    tip: 每次滚动鼠标的速率变化量（建议0.05-0.5）
+  minRate:
+    label: 最小播放速率
+    placeholder: 0.25
+  maxRate:
+    label: 最大播放速率
+    placeholder: 16.0
+  rememberSpeed:
+    label: 开启速率记忆
+  lastRate:
+    label: 默认记忆速率
+    placeholder: 1.0
+
+# 按钮文本
+button:
+  save: 保存配置
+  reset: 重置默认
+
+# 提示消息
+message:
+  loadSuccess: 已加载【{site}】的配置
+  saveSuccess: 【{site}】配置保存成功！
+  saveFail: 保存配置失败
+  loadFail: 加载配置失败
+  noTabUrl: 获取当前标签页URL失败
+  noSupportSave: 当前站点不支持配置保存
+  minGtMax: 最小速率不能大于等于最大速率
+  stepInvalid: 调节步长必须大于0
+  lastRateRange: 记忆速率需在 {min}~{max} 之间
+  noMatchedSite: 当前页面不是支持的视频站点，配置将无法生效

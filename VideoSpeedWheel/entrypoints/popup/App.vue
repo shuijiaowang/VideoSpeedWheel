@@ -1,59 +1,50 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import {getMatchedConfig} from "@/core/VideoSpeedConfig.js";
+import { getMatchedConfig } from "@/core/VideoSpeedConfig.js";
+import { i18n } from '#i18n';
+const t = i18n.t; // 简化i18n调用
 
-
-// 2. 全局默认配置（移除 TS 接口，直接使用对象）
+// 全局默认配置
 const DEFAULT_CONFIG = {
-  step: 0.1,          // 每次滚动的速率变化量
-  minRate: 0.25,       // 最小播放速率
-  maxRate: 16.0,       // 最大播放速率
-  rememberSpeed: true,// 是否记忆上次速率
-  lastRate: 1.0,      // 记忆的最后播放速率
+  step: 0.1,
+  minRate: 0.25,
+  maxRate: 16.0,
+  rememberSpeed: true,
+  lastRate: 1.0,
 };
 
-// 3. 响应式数据定义（移除 TS 类型注解）
+// 响应式数据
 const configForm = ref({ ...DEFAULT_CONFIG });
 const message = ref('');
-const messageType = ref(''); // 移除 TS 联合类型限定
-const currentSite = ref(''); // 当前匹配的站点名称
-const speedConfigItem = ref(null); // 动态存储项（适配不同站点）
-const isSiteMatched = ref(true); // 是否匹配到支持的站点
+const messageType = ref('');
+const currentSite = ref('');
+const speedConfigItem = ref(null);
+const isSiteMatched = ref(true);
 
-// 核心修改：加载配置函数（先获取当前标签页URL）
+// 加载配置
 const loadConfig = async () => {
   try {
-
-    // 1. 获取浏览器当前激活的标签页（关键！）
     const [activeTab] = await browser.tabs.query({
-      active: true, // 激活的标签页
-      currentWindow: true // 当前窗口,这个不能省略
+      active: true,
+      currentWindow: true
     });
-    console.log("执行吗？",activeTab,activeTab.url)
 
-
-    // 校验是否获取到标签页
     if (!activeTab || !activeTab.url) {
       isSiteMatched.value = false;
-      currentSite.value = '无法获取当前标签页信息';
-      showMessage('获取当前标签页URL失败', 'error');
+      currentSite.value = t('siteInfo.currentSite');
+      showMessage(t('message.noTabUrl'), 'error');
       return;
     }
 
-    // 2. 传入标签页URL，匹配站点配置
     const matchedConfig = getMatchedConfig(activeTab.url);
-    console.log("匹配到的配置：", matchedConfig);
-
     if (!matchedConfig) {
       isSiteMatched.value = false;
-      currentSite.value = '未匹配到支持的视频站点';
-      showMessage('当前页面不是支持的视频站点，配置将无法生效', 'info');
+      currentSite.value = t('siteInfo.currentSite');
+      showMessage(t('message.noMatchedSite'), 'info');
       return;
     }
 
-    // 3. 初始化存储项 + 加载配置
     currentSite.value = matchedConfig.siteName;
-    // 注意：这里要确保 storage 是 WXT 封装的存储对象
     speedConfigItem.value = storage.defineItem(matchedConfig.storageKey, {
       init: () => ({ ...DEFAULT_CONFIG, ...matchedConfig.defaultConfig }),
     });
@@ -61,61 +52,61 @@ const loadConfig = async () => {
     if (savedConfig) {
       configForm.value = { ...savedConfig };
     }
-    showMessage(`已加载【${currentSite.value}】的配置`, 'success');
+    showMessage(t('message.loadSuccess', { site: currentSite.value }), 'success');
   } catch (err) {
-    showMessage('加载配置失败', 'error');
+    showMessage(t('message.loadFail'), 'error');
     console.error('加载配置失败:', err);
   }
 };
 
-// 6. 保存配置到当前站点的存储
+// 保存配置
 const saveConfig = async () => {
   try {
-    // 校验是否匹配到站点
     if (!isSiteMatched.value || !speedConfigItem.value) {
-      showMessage('当前站点不支持配置保存', 'error');
+      showMessage(t('message.noSupportSave'), 'error');
       return;
     }
 
-    // 合法性校验（严格适配控制器规则）
+    // 合法性校验
     if (configForm.value.minRate >= configForm.value.maxRate) {
-      showMessage('最小速率不能大于等于最大速率', 'error');
+      showMessage(t('message.minGtMax'), 'error');
       return;
     }
     if (configForm.value.step <= 0) {
-      showMessage('调节步长必须大于0', 'error');
+      showMessage(t('message.stepInvalid'), 'error');
       return;
     }
     if (
         configForm.value.lastRate < configForm.value.minRate ||
         configForm.value.lastRate > configForm.value.maxRate
     ) {
-      showMessage(`记忆速率需在 ${configForm.value.minRate}~${configForm.value.maxRate} 之间`, 'error');
+      showMessage(t('message.lastRateRange', {
+        min: configForm.value.minRate,
+        max: configForm.value.maxRate
+      }), 'error');
       return;
     }
 
-    // 保存配置到 WXT storage
     await speedConfigItem.value.setValue(configForm.value);
-    showMessage(`【${currentSite.value}】配置保存成功！`, 'success');
+    showMessage(t('message.saveSuccess', { site: currentSite.value }), 'success');
   } catch (err) {
-    showMessage('保存配置失败', 'error');
+    showMessage(t('message.saveFail'), 'error');
     console.error('保存配置失败:', err);
   }
 };
 
-// 7. 重置为当前站点的默认配置
+// 重置配置
 const resetConfig = () => {
   const matchedConfig = getMatchedConfig();
   if (matchedConfig) {
-    // 重置为站点默认配置（而非全局默认）
     configForm.value = { ...DEFAULT_CONFIG, ...matchedConfig.defaultConfig };
   } else {
     configForm.value = { ...DEFAULT_CONFIG };
   }
-  saveConfig(); // 重置后自动保存
+  saveConfig();
 };
 
-// 8. 提示消息封装（移除 TS 参数类型注解）
+// 提示消息封装
 const showMessage = (text, type) => {
   message.value = text;
   messageType.value = type;
@@ -125,74 +116,74 @@ const showMessage = (text, type) => {
   }, 3000);
 };
 
-// 9. 页面生命周期
+// 生命周期
 onMounted(() => {
-  loadConfig(); // 挂载时加载配置
+  loadConfig();
 });
 
 onUnmounted(() => {
-  message.value = ''; // 卸载时清空消息
+  message.value = '';
 });
 </script>
 
 <template>
   <div class="popup-container">
-    <!-- 站点信息提示 -->
+    <!-- 站点信息 -->
     <div class="site-info">
-      <h4>当前站点：{{ currentSite }}</h4>
+      <h4>{{ t('siteInfo.currentSite') }}：{{ currentSite }}</h4>
       <p v-if="!isSiteMatched" class="warn-text">
-        ⚠️ 此页面不是支持的视频站点，配置无法生效
+        {{ t('siteInfo.noSupport') }}
       </p>
     </div>
 
-    <!-- 配置表单区域 -->
+    <!-- 配置面板 -->
     <div class="config-panel" :class="{ disabled: !isSiteMatched }">
-      <h3>视频倍速自定义配置,hello world</h3>
+      <h3>{{ t('configPanel.title') }}</h3>
 
-      <!-- 1. 滚轮调节步长 -->
+      <!-- 滚轮调节步长 -->
       <div class="form-item">
-        <label>滚轮调节步长：</label>
+        <label>{{ t('form.step.label') }}：</label>
         <input
             type="number"
             step="0.05"
             v-model.number="configForm.step"
-            placeholder="0.1"
+            :placeholder="t('form.step.placeholder')"
             :disabled="!isSiteMatched"
         />
-        <small class="form-tip">每次滚动鼠标的速率变化量（建议0.05-0.5）</small>
+        <small class="form-tip">{{ t('form.step.tip') }}</small>
       </div>
 
-      <!-- 2. 最小/最大速率 -->
+      <!-- 最小/最大速率 -->
       <div class="form-row">
         <div class="form-item">
-          <label>最小播放速率：</label>
+          <label>{{ t('form.minRate.label') }}：</label>
           <input
               type="number"
               step="0.1"
               min="0.1"
               max="16.0"
               v-model.number="configForm.minRate"
-              placeholder="0.25"
+              :placeholder="t('form.minRate.placeholder')"
               :disabled="!isSiteMatched"
           />
         </div>
         <div class="form-item">
-          <label>最大播放速率：</label>
+          <label>{{ t('form.maxRate.label') }}：</label>
           <input
               type="number"
               step="0.1"
               min="0.25"
               max="32.0"
               v-model.number="configForm.maxRate"
-              placeholder="16.0"
+              :placeholder="t('form.maxRate.placeholder')"
               :disabled="!isSiteMatched"
           />
         </div>
       </div>
 
-      <!-- 3. 速率记忆配置 -->
+      <!-- 速率记忆 -->
       <div class="form-item switch-item">
-        <label>开启速率记忆：</label>
+        <label>{{ t('form.rememberSpeed.label') }}：</label>
         <input
             type="checkbox"
             v-model="configForm.rememberSpeed"
@@ -200,14 +191,14 @@ onUnmounted(() => {
         />
       </div>
       <div class="form-item" v-if="configForm.rememberSpeed">
-        <label>默认记忆速率：</label>
+        <label>{{ t('form.lastRate.label') }}：</label>
         <input
             type="number"
             step="0.1"
             :min="configForm.minRate"
             :max="configForm.maxRate"
             v-model.number="configForm.lastRate"
-            placeholder="1.0"
+            :placeholder="t('form.lastRate.placeholder')"
             :disabled="!isSiteMatched"
         />
       </div>
@@ -215,10 +206,10 @@ onUnmounted(() => {
       <!-- 操作按钮 -->
       <div class="btn-group">
         <button @click="saveConfig" class="btn save" :disabled="!isSiteMatched">
-          保存配置
+          {{ t('button.save') }}
         </button>
         <button @click="resetConfig" class="btn reset" :disabled="!isSiteMatched">
-          重置默认
+          {{ t('button.reset') }}
         </button>
       </div>
 
@@ -231,7 +222,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 站点信息样式 */
+/* 原有样式保持不变 */
 .site-info {
   padding: 1em;
   text-align: center;
@@ -248,7 +239,6 @@ onUnmounted(() => {
   margin: 0.5em 0 0 0;
 }
 
-/* 配置面板样式 */
 .popup-container {
   width: 380px;
   padding: 0 1em;
@@ -309,7 +299,6 @@ onUnmounted(() => {
   margin-bottom: 1em;
 }
 
-/* 按钮样式 */
 .btn-group {
   display: flex;
   gap: 1em;
@@ -343,7 +332,6 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-/* 提示消息 */
 .message {
   margin-top: 1em;
   padding: 0.7em;
