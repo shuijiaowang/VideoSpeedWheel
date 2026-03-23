@@ -17,7 +17,7 @@ export const videoSpeedConfigs = [
             minRate: 0.1,
             maxRate: 16.0,
             lastRate: 1.0,
-            rememberSpeed: true
+            rememberSpeed: false
         }
     },
     //B站普通视频/B站番剧/芝士课堂

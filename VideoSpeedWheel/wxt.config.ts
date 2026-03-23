@@ -4,7 +4,7 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-vue','@wxt-dev/i18n/module'],
     manifest:{
-        permissions: ['storage','tabs'],
+        permissions: ['storage','activeTab'],
         default_locale: 'zh_CN', // 默认语言为英语
         name: '__MSG_extName__',
         description: '__MSG_extDescription__',

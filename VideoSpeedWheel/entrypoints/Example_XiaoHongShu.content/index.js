@@ -12,7 +12,7 @@ export default defineContentScript({
     // 脚本注入后执行的核心逻辑（改为异步函数）
     async main() { // 关键：main改为async，支持await
         // 调用业务模块的初始化函数
-        console.log("鼠标倍速插件初始化");
+        // console.log("鼠标倍速插件初始化");
 
         const controller = new VideoSpeedController({
             // 1. 修复：storageKey必须加local:前缀

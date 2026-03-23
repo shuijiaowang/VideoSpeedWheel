@@ -69,7 +69,7 @@ export class VideoSpeedController {
     // 鼠标进入目标元素
     handleMouseEnter = async () => {
         if (this.storageKey.includes('general')) return; // 通用模式跳过
-        console.log("调试：鼠标悬浮触发状态") //
+        // console.log("调试：鼠标悬浮触发状态") //
         await this.initConfig() //更新参数，可能被popup进行修改，这样就不用通信
         this.isHovering = true; //修改状态
         this.targetElement.style.cursor = `n-resize`; //修改鼠标箭头样式作为提示
@@ -78,7 +78,7 @@ export class VideoSpeedController {
     // 鼠标离开目标元素：保存当前速率
     handleMouseLeave = async () => {
         if (this.storageKey.includes('general')) return; // 通用模式跳过
-        console.log("调试：鼠标离开结束并存储数据")
+        // console.log("调试：鼠标离开结束并存储数据")
         this.isHovering = false; //更新状态
         //这里暂时限制为两位数。
         if (this.videoElement) {
@@ -93,7 +93,7 @@ export class VideoSpeedController {
     // 滚轮事件处理
     handleWheel = (event) => {
         if (this.storageKey.includes('general')) return; // 通用模式跳过
-        console.log("触发滚轮事件触发")
+        // console.log("触发滚轮事件触发")
         if (!this.isHovering || !this.videoElement) return;
         event.stopPropagation();
         event.preventDefault();
@@ -141,7 +141,7 @@ export class VideoSpeedController {
                 // 使用记忆的速率作为基准
                 newRate = this.config.lastRate + (this.config.step * direction);
                 this.updateAllVideoSpeed(newRate);
-                console.log(`通用模式：倍速调整为 ${newRate.toFixed(2)}x`);
+                // console.log(`通用模式：倍速调整为 ${newRate.toFixed(2)}x`);
             }
             return;
         }
@@ -158,7 +158,7 @@ export class VideoSpeedController {
 
             // 添加到输入缓冲
             this.keyInputBuffer += key;
-            console.log(`键盘输入缓冲: ${this.keyInputBuffer}`);
+            // console.log(`键盘输入缓冲: ${this.keyInputBuffer}`);
 
             // 设置新的定时器，超时后处理输入
             this.keyInputTimer = setTimeout(() => {
@@ -191,7 +191,7 @@ export class VideoSpeedController {
         // 通用模式：所有视频设置
         else if (this.storageKey.includes('general')) {
             this.updateAllVideoSpeed(inputRate);
-            console.log(`通用模式：设置倍速为 ${inputRate.toFixed(2)}x`);
+            // console.log(`通用模式：设置倍速为 ${inputRate.toFixed(2)}x`);
         }
 
         this.keyInputBuffer = '';
@@ -213,7 +213,7 @@ export class VideoSpeedController {
             this.observeDynamicVideos();
             // 绑定键盘事件
             window.addEventListener('keydown', this.handleKeydown);
-            console.log("通用模式初始化完成：监听所有视频，仅支持键盘控制");
+            // console.log("通用模式初始化完成：监听所有视频，仅支持键盘控制");
             return;
         }
 
@@ -285,12 +285,12 @@ export class VideoSpeedController {
         if (targetElement) {
             const attrObserver = new MutationObserver((mutations) => {
                 // 只要属性变化就触发重新绑定
-                console.log(`[测试] listenElement属性变化:`, mutations);
+                // console.log(`[测试] listenElement属性变化:`, mutations);
                 this.init(targetSelector, videoSelector, textSelector, listenElement);
             });
             // 监听目标元素的所有属性变化
             attrObserver.observe(targetElement, {attributes: true});
-            console.log(`[测试] 已启动listenElement属性监听: ${listenElement}`);
+            // console.log(`[测试] 已启动listenElement属性监听: ${listenElement}`);
         } else {
             console.warn(`[测试] 未找到listenElement: ${listenElement}`);
         }
