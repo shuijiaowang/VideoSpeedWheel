@@ -1,8 +1,10 @@
 # locales/en.yml
-extName: Video Speed Controller (Wheel + Keyboard)
+extName: Quick Video Speed
 extDescription: Lightweight and efficient video speed adjustment tool, supports mouse wheel/keyboard shortcuts, multi-platform personalized configuration and speed memory
 
-ok: OK
+test:
+  test1: this is test1
+  test2: this is test2
 # Popup site info
 siteInfo:
   currentSite: Current Site
