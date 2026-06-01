@@ -1,4 +1,6 @@
 // core/VideoSpeedController.js
+import {GeneralSpeedOverlay, nodeMayContainVideo} from './GeneralSpeedOverlay.js';
+
 // 全局默认配置
 const DEFAULT_CONFIG = {
     step: 0.1,          // 每次滚动的速率变化量
@@ -74,7 +76,8 @@ export class VideoSpeedController {
         this.textElements = []; // 多视频场景下的倍速显示元素
         this.config = null; // 最终生效配置
         //鼠标触发状态
-        this.isHovering = false; //是否处于触发状态，此时滚轮可修改倍速,通用模式下始终为false
+        this.isHovering = false; //是否处于触发状态，此时滚轮可修改倍速
+        this.generalOverlay = null; // 通用模式悬浮倍速 UI
         // 键盘输入相关状态
         this.keyInputBuffer = ''; // 存储数字输入缓冲（如"1.25"）
         this.keyInputTimer = null; // 输入延时定时器（防抖）
@@ -212,11 +215,18 @@ export class VideoSpeedController {
         });
         this.config.lastRate = fixedRate;
         this.syncTextDisplays(fixedRate);
+        this.generalOverlay?.updateAllTexts(fixedRate);
         // 保存记忆速率
         if (save && this.config.rememberSpeed) {
             this.saveConfig();
         }
         return fixedRate;
+    }
+
+    changeRateByStep(direction) {
+        if (!this.config) return;
+        const newRate = this.config.lastRate + (this.config.step * direction);
+        return this.updateAllVideoSpeed(newRate, {save: false});
     }
 
     // 鼠标进入目标元素
@@ -359,9 +369,13 @@ export class VideoSpeedController {
             }
             // 监听动态添加的视频元素
             this.observeDynamicVideos();
+            this.generalOverlay = new GeneralSpeedOverlay(this);
+            this.generalOverlay.start();
+            if (!this.config.rememberSpeed) {
+                this.updateAllVideoSpeed(this.config.lastRate, {save: false});
+            }
             // 绑定键盘事件
             window.addEventListener('keydown', this.handleKeydown);
-            // console.log("通用模式初始化完成：监听所有视频，仅支持键盘控制");
             return;
         }
 
@@ -459,16 +473,22 @@ export class VideoSpeedController {
             this.bindIframeVideoObserver(node);
         }
 
-        const subtreeRoot =
-            node.nodeType === Node.DOCUMENT_FRAGMENT_NODE
-            || node.nodeType === Node.ELEMENT_NODE
-                ? node
-                : null;
-        if (subtreeRoot) {
-            this.applyRateToVideos(collectVideosFromRoot(subtreeRoot), rate);
-            if (subtreeRoot.querySelectorAll) {
-                this.registerShadowObservers(subtreeRoot);
-            }
+        const isElementOrFragment =
+            node.nodeType === Node.ELEMENT_NODE
+            || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE;
+        if (!isElementOrFragment || !nodeMayContainVideo(node)) {
+            return;
+        }
+
+        const subtreeVideos = collectVideosFromRoot(node);
+        if (subtreeVideos.length) {
+            this.applyRateToVideos(subtreeVideos, rate);
+        }
+        if (node.querySelectorAll) {
+            this.registerShadowObservers(node);
+        }
+        if (this.generalOverlay) {
+            this.generalOverlay.scheduleVideoScan();
         }
     }
 
@@ -536,6 +556,10 @@ export class VideoSpeedController {
             this.videoObserver = null;
         }
         this.observedMutationRoots = null;
+        if (this.generalOverlay) {
+            this.generalOverlay.destroy();
+            this.generalOverlay = null;
+        }
         // 特定平台清理
         this.removeTargetEventListeners();
         this.targetElement = null;
