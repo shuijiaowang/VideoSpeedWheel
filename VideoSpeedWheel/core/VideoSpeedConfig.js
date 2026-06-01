@@ -42,6 +42,23 @@ export const videoSpeedConfigs = [
             rememberSpeed: true
         }
     },
+    {
+        matches: ['https://www.udemy.com/course/*'],
+        storageKey: 'local:udemy_video_speed_config',
+        selectors: {
+            rateElement: '[data-purpose="playback-rate-button"] span',
+            videoElement: 'video',
+            extraElement: '[data-purpose="playback-rate-button"] span'
+        },
+        siteName:"udemy",
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.1,
+            maxRate: 16.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    },
     // 小红书
     {
         matches: ['https://www.xiaohongshu.com/*'],

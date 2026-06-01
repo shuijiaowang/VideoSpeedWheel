@@ -5,7 +5,7 @@ import {getMatchedConfig} from "../core/VideoSpeedConfig.js";
 export default defineContentScript({
     matches: ['<all_urls>'],
     runAt: 'document_idle',
-    allFrames: false,
+    allFrames: true,
     async main() {
         // console.log('鼠标倍速插件');
         const matchedConfig = getMatchedConfig();

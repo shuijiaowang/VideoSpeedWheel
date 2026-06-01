@@ -8,6 +8,57 @@ const DEFAULT_CONFIG = {
     lastRate: 1.0,      // 记忆的最后播放速率
 };
 
+/** 从 root 收集 video（light DOM + open Shadow + 同源 iframe，不含 closed Shadow） */
+export function collectVideosFromRoot(root, options = {}) {
+    const {includeIframes = true} = options;
+    const videos = new Set();
+    const visitedDocs = new WeakSet();
+
+    const walk = (node) => {
+        if (!node) return;
+        if (node.nodeType === Node.DOCUMENT_NODE) {
+            if (visitedDocs.has(node)) return;
+            visitedDocs.add(node);
+            walk(node.documentElement);
+            return;
+        }
+        if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+            for (const child of node.children) {
+                walk(child);
+            }
+            return;
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.tagName === 'VIDEO') {
+                videos.add(node);
+            }
+            if (node.shadowRoot) {
+                walk(node.shadowRoot);
+            }
+            if (includeIframes && node.tagName === 'IFRAME') {
+                try {
+                    const doc = node.contentDocument;
+                    if (doc?.documentElement) {
+                        walk(doc);
+                    }
+                } catch (_) {
+                    // 跨域 iframe 无法访问
+                }
+            }
+            for (const child of node.children) {
+                walk(child);
+            }
+        }
+    };
+
+    if (root instanceof Document) {
+        walk(root);
+    } else if (root instanceof DocumentFragment || root instanceof Element) {
+        walk(root);
+    }
+    return Array.from(videos);
+}
+
 export class VideoSpeedController {
     constructor(options) {
 
@@ -29,6 +80,7 @@ export class VideoSpeedController {
         this.keyInputTimer = null; // 输入延时定时器（防抖）
         this.KEY_INPUT_TIMEOUT = 1500; // 输入超时时间（ms），超时后确认输入
         this.videoObserver = null; // 监听动态添加的视频
+        this.observedMutationRoots = null; // 已挂 MutationObserver 的根（含 shadowRoot）
         this.uiPollTimer = null; // 轮询保活自定义UI
     }
 
@@ -47,7 +99,20 @@ export class VideoSpeedController {
         await storage.setItem(this.storageKey, this.config);
     }
     getAllVideoElements() {
+        if (this.storageKey.includes('general')) {
+            return collectVideosFromRoot(document);
+        }
         return Array.from(document.querySelectorAll('video'));
+    }
+
+    applyRateToVideos(videos, rate) {
+        if (!this.config || !videos.length) return;
+        const fixedRate = Number(
+            Math.min(Math.max(rate, this.config.minRate), this.config.maxRate).toFixed(2)
+        );
+        videos.forEach(video => {
+            video.playbackRate = fixedRate;
+        });
     }
 
     formatRate(rate) {
@@ -352,29 +417,80 @@ export class VideoSpeedController {
         //键盘监听，ctrl+alt+键盘如1.25会直接设置视频倍速为1.25
         window.addEventListener('keydown', this.handleKeydown);
     }
-// 监听动态添加的视频（通用模式）
+    observeMutationRoot(root) {
+        if (!root || !this.videoObserver || this.observedMutationRoots?.has(root)) {
+            return;
+        }
+        this.observedMutationRoots.add(root);
+        this.videoObserver.observe(root, {childList: true, subtree: true});
+    }
+
+    registerShadowObservers(container) {
+        if (!container?.querySelectorAll) return;
+        container.querySelectorAll('*').forEach(el => {
+            if (el.shadowRoot) {
+                this.observeMutationRoot(el.shadowRoot);
+                this.registerShadowObservers(el.shadowRoot);
+            }
+        });
+    }
+
+    bindIframeVideoObserver(iframe) {
+        const onIframeReady = () => {
+            try {
+                const doc = iframe.contentDocument;
+                if (!doc?.body) return;
+                this.observeMutationRoot(doc.body);
+                this.registerShadowObservers(doc.body);
+                this.applyRateToVideos(collectVideosFromRoot(doc), this.config.lastRate);
+            } catch (_) {
+                // 跨域
+            }
+        };
+        iframe.addEventListener('load', onIframeReady);
+        onIframeReady();
+    }
+
+    handleAddedNodeForVideos(node) {
+        if (!this.config || !node) return;
+        const rate = this.config.lastRate;
+
+        if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'IFRAME') {
+            this.bindIframeVideoObserver(node);
+        }
+
+        const subtreeRoot =
+            node.nodeType === Node.DOCUMENT_FRAGMENT_NODE
+            || node.nodeType === Node.ELEMENT_NODE
+                ? node
+                : null;
+        if (subtreeRoot) {
+            this.applyRateToVideos(collectVideosFromRoot(subtreeRoot), rate);
+            if (subtreeRoot.querySelectorAll) {
+                this.registerShadowObservers(subtreeRoot);
+            }
+        }
+    }
+
+    // 监听动态添加的视频（通用模式：含 open Shadow、同源 iframe）
     observeDynamicVideos() {
+        this.observedMutationRoots = new WeakSet();
         this.videoObserver = new MutationObserver((mutations) => {
             mutations.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
-                    // 新增视频元素：应用当前倍速
-                    if (node.tagName === 'VIDEO') {
-                        node.playbackRate = this.config.lastRate;
-                    }
-                    // 子节点中有视频：递归处理
-                    else if (node.querySelectorAll) {
-                        node.querySelectorAll('video').forEach(video => {
-                            video.playbackRate = this.config.lastRate;
-                        });
-                    }
+                    this.handleAddedNodeForVideos(node);
                 });
             });
         });
-        // 监听整个文档的视频添加
-        this.videoObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+
+        const body = document.body;
+        if (body) {
+            this.observeMutationRoot(body);
+            this.registerShadowObservers(body);
+            document.querySelectorAll('iframe').forEach(iframe => {
+                this.bindIframeVideoObserver(iframe);
+            });
+        }
     }
     listen(targetSelector, videoSelector, textSelector, listenElement, ui_create_func, root = document) {
         // listenElement的属性变化，一般是父级元素状态改为活跃
@@ -419,6 +535,7 @@ export class VideoSpeedController {
             this.videoObserver.disconnect();
             this.videoObserver = null;
         }
+        this.observedMutationRoots = null;
         // 特定平台清理
         this.removeTargetEventListeners();
         this.targetElement = null;
