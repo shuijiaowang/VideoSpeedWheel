@@ -5,7 +5,9 @@ ok: OOk
 # 弹窗站点信息
 siteInfo:
   currentSite: 当前站点
+  unknown: 未知页面
   noSupport: ⚠️ 此页面不是支持的视频站点，配置无法生效
+  disabledHint: 已禁止在此网站运行，刷新页面后生效
 
 # 配置面板
 configPanel:
@@ -23,6 +25,8 @@ form:
   maxRate:
     label: 最大播放速率
     placeholder: 16.0
+  disableOnSite:
+    label: 禁止在此网站运行
   rememberSpeed:
     label: 开启速率记忆
   lastRate:
@@ -46,3 +50,5 @@ message:
   stepInvalid: 调节步长必须大于0
   lastRateRange: 记忆速率需在 {min}~{max} 之间
   noMatchedSite: 当前页面不是支持的视频站点，配置将无法生效
+  siteDisabled: 已禁止在【{site}】运行，请刷新页面
+  siteEnabled: 已恢复在【{site}】运行，请刷新页面

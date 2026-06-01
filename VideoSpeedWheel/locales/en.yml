@@ -8,7 +8,9 @@ test:
 # Popup site info
 siteInfo:
   currentSite: Current Site
+  unknown: Unknown page
   noSupport: ⚠️ This page is not a supported video site, configuration will not take effect
+  disabledHint: Extension is disabled on this site. Refresh the page to apply.
 
 # Config panel
 configPanel:
@@ -26,6 +28,8 @@ form:
   maxRate:
     label: Maximum Playback Speed
     placeholder: 16.0
+  disableOnSite:
+    label: Disable on this site
   rememberSpeed:
     label: Enable Speed Memory
   lastRate:
@@ -49,3 +53,5 @@ message:
   stepInvalid: Adjustment step must be greater than 0
   lastRateRange: Remembered speed must be between {min} and {max}
   noMatchedSite: This page is not a supported video site, configuration will not take effect
+  siteDisabled: Disabled on 【{site}】. Refresh the page to apply.
+  siteEnabled: Re-enabled on 【{site}】. Refresh the page to apply.

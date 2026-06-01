@@ -1,6 +1,11 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { getMatchedConfig } from "@/core/VideoSpeedConfig.js";
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import {
+  getHostnameFromUrl,
+  getMatchedConfig,
+  isSiteDisabled,
+  setSiteDisabled,
+} from "@/core/VideoSpeedConfig.js";
 import { i18n } from '#i18n';
 const t = i18n.t; // 简化i18n调用
 
@@ -18,8 +23,11 @@ const configForm = ref({ ...DEFAULT_CONFIG });
 const message = ref('');
 const messageType = ref('');
 const currentSite = ref('');
+const currentHostname = ref('');
 const speedConfigItem = ref(null);
 const isSiteMatched = ref(true);
+const siteDisabled = ref(false);
+const canUseConfig = computed(() => isSiteMatched.value && !siteDisabled.value);
 
 // 加载配置
 const loadConfig = async () => {
@@ -31,20 +39,30 @@ const loadConfig = async () => {
 
     if (!activeTab || !activeTab.url) {
       isSiteMatched.value = false;
-      currentSite.value = t('siteInfo.currentSite');
+      currentSite.value = t('siteInfo.unknown');
+      currentHostname.value = '';
+      siteDisabled.value = false;
       showMessage(t('message.noTabUrl'), 'error');
       return;
     }
 
+    const hostname = getHostnameFromUrl(activeTab.url);
+    currentHostname.value = hostname;
+    currentSite.value = hostname || t('siteInfo.unknown');
+    siteDisabled.value = hostname ? await isSiteDisabled(hostname) : false;
+
     const matchedConfig = getMatchedConfig(activeTab.url);
     if (!matchedConfig) {
       isSiteMatched.value = false;
-      currentSite.value = t('siteInfo.currentSite');
       showMessage(t('message.noMatchedSite'), 'info');
       return;
     }
 
-    currentSite.value = matchedConfig.siteName;
+    isSiteMatched.value = true;
+    if (siteDisabled.value) {
+      showMessage(t('message.siteDisabled', { site: currentSite.value }), 'info');
+      return;
+    }
     speedConfigItem.value = storage.defineItem(matchedConfig.storageKey, {
       init: () => ({ ...DEFAULT_CONFIG, ...matchedConfig.defaultConfig }),
     });
@@ -60,9 +78,32 @@ const loadConfig = async () => {
 };
 
 // 保存配置
+const onSiteDisabledChange = async (event) => {
+  const disabled = event.target.checked;
+  if (!currentHostname.value) return;
+
+  try {
+    await setSiteDisabled(currentHostname.value, disabled);
+    siteDisabled.value = disabled;
+    showMessage(
+      disabled
+        ? t('message.siteDisabled', { site: currentSite.value })
+        : t('message.siteEnabled', { site: currentSite.value }),
+      disabled ? 'info' : 'success'
+    );
+    if (!disabled && isSiteMatched.value) {
+      await loadConfig();
+    }
+  } catch (err) {
+    event.target.checked = !disabled;
+    showMessage(t('message.saveFail'), 'error');
+    console.error('更新站点禁用状态失败:', err);
+  }
+};
+
 const saveConfig = async () => {
   try {
-    if (!isSiteMatched.value || !speedConfigItem.value) {
+    if (!canUseConfig.value || !speedConfigItem.value) {
       showMessage(t('message.noSupportSave'), 'error');
       return;
     }
@@ -134,10 +175,21 @@ onUnmounted(() => {
       <p v-if="!isSiteMatched" class="warn-text">
         {{ t('siteInfo.noSupport') }}
       </p>
+      <p v-else-if="siteDisabled" class="warn-text">
+        {{ t('siteInfo.disabledHint') }}
+      </p>
+      <div v-if="currentHostname" class="form-item switch-item site-disable-item">
+        <label>{{ t('form.disableOnSite.label') }}：</label>
+        <input
+          type="checkbox"
+          :checked="siteDisabled"
+          @change="onSiteDisabledChange"
+        />
+      </div>
     </div>
 
     <!-- 配置面板 -->
-    <div class="config-panel" :class="{ disabled: !isSiteMatched }">
+    <div class="config-panel" :class="{ disabled: !canUseConfig }">
       <h3>{{ t('configPanel.title') }}</h3>
 
       <!-- 滚轮调节步长 -->
@@ -148,7 +200,7 @@ onUnmounted(() => {
             step="0.05"
             v-model.number="configForm.step"
             :placeholder="t('form.step.placeholder')"
-            :disabled="!isSiteMatched"
+            :disabled="!canUseConfig"
         />
         <small class="form-tip">{{ t('form.step.tip') }}</small>
       </div>
@@ -164,7 +216,7 @@ onUnmounted(() => {
               max="16.0"
               v-model.number="configForm.minRate"
               :placeholder="t('form.minRate.placeholder')"
-              :disabled="!isSiteMatched"
+              :disabled="!canUseConfig"
           />
         </div>
         <div class="form-item">
@@ -176,7 +228,7 @@ onUnmounted(() => {
               max="32.0"
               v-model.number="configForm.maxRate"
               :placeholder="t('form.maxRate.placeholder')"
-              :disabled="!isSiteMatched"
+              :disabled="!canUseConfig"
           />
         </div>
       </div>
@@ -187,7 +239,7 @@ onUnmounted(() => {
         <input
             type="checkbox"
             v-model="configForm.rememberSpeed"
-            :disabled="!isSiteMatched"
+            :disabled="!canUseConfig"
         />
       </div>
       <div class="form-item" v-if="configForm.rememberSpeed">
@@ -199,16 +251,16 @@ onUnmounted(() => {
             :max="configForm.maxRate"
             v-model.number="configForm.lastRate"
             :placeholder="t('form.lastRate.placeholder')"
-            :disabled="!isSiteMatched"
+            :disabled="!canUseConfig"
         />
       </div>
 
       <!-- 操作按钮 -->
       <div class="btn-group">
-        <button @click="saveConfig" class="btn save" :disabled="!isSiteMatched">
+        <button @click="saveConfig" class="btn save" :disabled="!canUseConfig">
           {{ t('button.save') }}
         </button>
-        <button @click="resetConfig" class="btn reset" :disabled="!isSiteMatched">
+        <button @click="resetConfig" class="btn reset" :disabled="!canUseConfig">
           {{ t('button.reset') }}
         </button>
       </div>
@@ -237,6 +289,15 @@ onUnmounted(() => {
   color: #ff9800;
   font-size: 12px;
   margin: 0.5em 0 0 0;
+}
+.site-disable-item {
+  margin: 0.75em auto 0;
+  max-width: 280px;
+  padding: 0 0.5em;
+}
+.site-disable-item label {
+  font-size: 13px;
+  color: #666;
 }
 
 .popup-container {

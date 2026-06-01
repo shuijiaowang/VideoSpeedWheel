@@ -1,13 +1,15 @@
 
 import {VideoSpeedController} from "../core/VideoSpeedController.js";
-import {getMatchedConfig} from "../core/VideoSpeedConfig.js";
+import {getHostnameFromUrl, getMatchedConfig, isSiteDisabled} from "../core/VideoSpeedConfig.js";
 
 export default defineContentScript({
     matches: ['<all_urls>'],
     runAt: 'document_idle',
     allFrames: true,
     async main() {
-        // console.log('鼠标倍速插件');
+        const hostname = getHostnameFromUrl(window.location.href);
+        if (await isSiteDisabled(hostname)) return;
+
         const matchedConfig = getMatchedConfig();
         if (!matchedConfig) return;
         //这里改成，如果没有匹配成功，则绑定网页中所有的视频，并可以通过键盘进行控制

@@ -156,6 +156,37 @@ export const videoSpeedConfigs = [
     }
 ];
 
+export const disabledSitesItem = storage.defineItem('local:disabled_site_hostnames', {
+    init: () => [],
+});
+
+export function getHostnameFromUrl(url) {
+    try {
+        return new URL(url).hostname;
+    } catch {
+        return '';
+    }
+}
+
+export async function isSiteDisabled(hostname) {
+    if (!hostname) return false;
+    const list = await disabledSitesItem.getValue();
+    return Array.isArray(list) && list.includes(hostname);
+}
+
+export async function setSiteDisabled(hostname, disabled) {
+    if (!hostname) return;
+    const list = [...(await disabledSitesItem.getValue() ?? [])];
+    const index = list.indexOf(hostname);
+    if (disabled && index === -1) {
+        list.push(hostname);
+        await disabledSitesItem.setValue(list);
+    } else if (!disabled && index !== -1) {
+        list.splice(index, 1);
+        await disabledSitesItem.setValue(list);
+    }
+}
+
 // 辅助函数：根据当前URL匹配对应的配置
 export const getMatchedConfig = (currentUrl) => {
     if(!currentUrl){
