@@ -1,7 +1,9 @@
-/** 通用模式：在 video 后插入兄弟节点作倍速钮，相对父容器绝对定位（右侧） */
+/** 通用模式：overlay 按 video 的 getBoundingClientRect 做 fixed 定位；light DOM 挂 video 后，open Shadow 挂 shadowRoot */
 
 const OVERLAY_ATTR = 'data-video-speed-wheel';
-const PARENT_FLAG = 'data-video-speed-wheel-parent';
+const MOUNT_LIGHT = 'light';
+const MOUNT_SHADOW = 'shadow';
+const OVERLAY_INSET_RIGHT = 8;
 const MIN_VIDEO_PX = 80;
 const HOT_RIGHT = 0.1;
 const HOT_TOP = 0.4;
@@ -9,12 +11,7 @@ const HOT_BOTTOM = 0.6;
 const SCAN_DEBOUNCE_MS = 500;
 const POLL_INTERVAL_MS = 2000;
 
-const OVERLAY_STYLE = `
-    position: absolute;
-    right: 4%;
-    left: auto;
-    top: 50%;
-    transform: translateY(-50%);
+const OVERLAY_BASE_STYLE = `
     z-index: 2147483647;
     display: none;
     align-items: center;
@@ -30,8 +27,21 @@ const OVERLAY_STYLE = `
     box-shadow: 0 1px 4px rgba(0,0,0,0.35);
 `;
 
+const OVERLAY_POSITIONED_STYLE = `
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translate(-100%, -50%);
+    ${OVERLAY_BASE_STYLE}
+`;
+
 function formatRate(rate) {
     return `${Number(rate.toFixed(2))}x`;
+}
+
+function getOpenShadowRoot(video) {
+    const root = video.getRootNode();
+    return root instanceof ShadowRoot ? root : null;
 }
 
 function isOurOverlayNode(node) {
@@ -64,19 +74,18 @@ function isInHotZone(video, clientX, clientY) {
         && y <= rect.height * HOT_BOTTOM;
 }
 
-function ensureParentPositioned(parent) {
-    if (!parent || parent.hasAttribute(PARENT_FLAG)) return;
-    const pos = getComputedStyle(parent).position;
-    if (pos === 'static') {
-        parent.style.position = 'relative';
-    }
-    parent.setAttribute(PARENT_FLAG, '1');
+function isPointerOnOverlay(clientX, clientY) {
+    const elements = document.elementsFromPoint(clientX, clientY);
+    return elements.some(el =>
+        el.getAttribute?.(OVERLAY_ATTR) === 'general-speed-overlay'
+        || el.closest?.(`[${OVERLAY_ATTR}="general-speed-overlay"]`)
+    );
 }
 
 export class GeneralSpeedOverlay {
     constructor(controller) {
         this.controller = controller;
-        /** @type {Map<HTMLVideoElement, HTMLElement>} */
+        /** @type {Map<HTMLVideoElement, { el: HTMLElement, mount: string }>} */
         this.entries = new Map();
         this.activeVideo = null;
         this.hoveringOverlay = false;
@@ -84,8 +93,10 @@ export class GeneralSpeedOverlay {
         this.pendingMove = null;
         this.scanTimer = null;
         this.pollTimer = null;
+        this.repositionRafId = 0;
 
         this.handleDocumentMouseMove = this.handleDocumentMouseMove.bind(this);
+        this.handleReposition = this.scheduleReposition.bind(this);
         this.handleOverlayMouseEnter = this.handleOverlayMouseEnter.bind(this);
         this.handleOverlayMouseLeave = this.handleOverlayMouseLeave.bind(this);
         this.handleOverlayWheel = this.handleOverlayWheel.bind(this);
@@ -94,11 +105,15 @@ export class GeneralSpeedOverlay {
     start() {
         this.scheduleVideoScan(true);
         document.addEventListener('mousemove', this.handleDocumentMouseMove, {passive: true});
+        window.addEventListener('scroll', this.handleReposition, true);
+        window.addEventListener('resize', this.handleReposition, {passive: true});
         this.pollTimer = setInterval(() => this.scheduleVideoScan(), POLL_INTERVAL_MS);
     }
 
     destroy() {
         document.removeEventListener('mousemove', this.handleDocumentMouseMove);
+        window.removeEventListener('scroll', this.handleReposition, true);
+        window.removeEventListener('resize', this.handleReposition);
         if (this.pollTimer) {
             clearInterval(this.pollTimer);
             this.pollTimer = null;
@@ -111,7 +126,11 @@ export class GeneralSpeedOverlay {
             cancelAnimationFrame(this.moveRafId);
             this.moveRafId = 0;
         }
-        for (const el of this.entries.values()) {
+        if (this.repositionRafId) {
+            cancelAnimationFrame(this.repositionRafId);
+            this.repositionRafId = 0;
+        }
+        for (const {el} of this.entries.values()) {
             el.remove();
         }
         this.entries.clear();
@@ -142,12 +161,15 @@ export class GeneralSpeedOverlay {
         const alive = new Set(videos);
 
         for (const video of videos) {
-            if (!this.entries.has(video)) {
+            const entry = this.entries.get(video);
+            if (!entry || !entry.el.isConnected) {
+                entry?.el.remove();
+                this.entries.delete(video);
                 this.attachToVideo(video);
             }
         }
 
-        for (const [video, el] of this.entries) {
+        for (const [video, {el}] of this.entries) {
             if (!alive.has(video) || !video.isConnected) {
                 el.remove();
                 this.entries.delete(video);
@@ -159,13 +181,21 @@ export class GeneralSpeedOverlay {
 
         const rate = this.controller.config?.lastRate ?? 1;
         this.updateAllTexts(rate);
+
+        if (this.activeVideo?.isConnected) {
+            const entry = this.entries.get(this.activeVideo);
+            if (entry?.el.style.display === 'flex') {
+                this.positionOverlay(this.activeVideo, entry);
+            }
+        }
     }
 
-    createOverlayElement() {
+    createOverlayElement(mount) {
         const el = document.createElement('div');
         el.setAttribute(OVERLAY_ATTR, 'general-speed-overlay');
+        el.dataset.vswMount = mount;
         el.textContent = formatRate(this.controller.config?.lastRate ?? 1);
-        el.style.cssText = OVERLAY_STYLE;
+        el.style.cssText = OVERLAY_POSITIONED_STYLE;
         el.addEventListener('mouseenter', this.handleOverlayMouseEnter);
         el.addEventListener('mouseleave', this.handleOverlayMouseLeave);
         el.addEventListener('wheel', this.handleOverlayWheel, {passive: false});
@@ -173,19 +203,46 @@ export class GeneralSpeedOverlay {
     }
 
     attachToVideo(video) {
+        const shadowRoot = getOpenShadowRoot(video);
+        if (shadowRoot) {
+            this.attachToVideoInShadow(video, shadowRoot);
+            return;
+        }
+
         const next = video.nextElementSibling;
         if (next?.getAttribute(OVERLAY_ATTR) === 'general-speed-overlay') {
-            this.entries.set(video, next);
+            this.entries.set(video, {
+                el: next,
+                mount: next.dataset.vswMount || MOUNT_LIGHT,
+            });
             return;
         }
 
         const parent = video.parentElement;
         if (!parent) return;
 
-        ensureParentPositioned(parent);
-        const el = this.createOverlayElement();
+        const el = this.createOverlayElement(MOUNT_LIGHT);
         video.insertAdjacentElement('afterend', el);
-        this.entries.set(video, el);
+        this.entries.set(video, {el, mount: MOUNT_LIGHT});
+    }
+
+    attachToVideoInShadow(video, shadowRoot) {
+        const el = this.createOverlayElement(MOUNT_SHADOW);
+        shadowRoot.appendChild(el);
+        this.entries.set(video, {el, mount: MOUNT_SHADOW});
+    }
+
+    positionOverlay(video, entry) {
+        const {el} = entry;
+        const rect = video.getBoundingClientRect();
+        if (rect.width < MIN_VIDEO_PX || rect.height < MIN_VIDEO_PX) {
+            el.style.display = 'none';
+            return;
+        }
+
+        el.style.left = `${rect.right - OVERLAY_INSET_RIGHT}px`;
+        el.style.top = `${rect.top + rect.height / 2}px`;
+        el.style.transform = 'translate(-100%, -50%)';
     }
 
     setActiveVideo(video) {
@@ -193,17 +250,18 @@ export class GeneralSpeedOverlay {
 
         if (this.activeVideo) {
             const prev = this.entries.get(this.activeVideo);
-            if (prev) prev.style.display = 'none';
+            if (prev) prev.el.style.display = 'none';
         }
 
         this.activeVideo = video;
 
         if (video) {
-            const el = this.entries.get(video);
-            if (el) {
+            const entry = this.entries.get(video);
+            if (entry) {
                 const rect = video.getBoundingClientRect();
                 if (rect.width >= MIN_VIDEO_PX && rect.height >= MIN_VIDEO_PX) {
-                    el.style.display = 'flex';
+                    this.positionOverlay(video, entry);
+                    entry.el.style.display = 'flex';
                 }
             }
         }
@@ -213,6 +271,18 @@ export class GeneralSpeedOverlay {
         if (this.hoveringOverlay) return;
         this.setActiveVideo(null);
         this.controller.isHovering = false;
+    }
+
+    scheduleReposition() {
+        if (!this.activeVideo) return;
+        if (this.repositionRafId) return;
+        this.repositionRafId = requestAnimationFrame(() => {
+            this.repositionRafId = 0;
+            const entry = this.entries.get(this.activeVideo);
+            if (entry && this.activeVideo?.isConnected && entry.el.style.display === 'flex') {
+                this.positionOverlay(this.activeVideo, entry);
+            }
+        });
     }
 
     handleDocumentMouseMove(event) {
@@ -230,8 +300,7 @@ export class GeneralSpeedOverlay {
         if (this.hoveringOverlay) return;
 
         const {clientX, clientY} = event;
-        const hit = document.elementFromPoint(clientX, clientY);
-        if (hit?.closest?.(`[${OVERLAY_ATTR}="general-speed-overlay"]`)) {
+        if (isPointerOnOverlay(clientX, clientY)) {
             return;
         }
 
@@ -272,7 +341,7 @@ export class GeneralSpeedOverlay {
 
     updateAllTexts(rate) {
         const text = formatRate(rate);
-        for (const el of this.entries.values()) {
+        for (const {el} of this.entries.values()) {
             el.textContent = text;
         }
     }
