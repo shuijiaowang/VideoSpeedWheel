@@ -1,5 +1,5 @@
 // 所有视频站点的倍速配置表
-import {createYouTubeSpeedDisplay} from "./VideoSpeedUi.js";
+import {createTwitterSpeedDisplay, createYouTubeSpeedDisplay} from "./VideoSpeedUi.js";
 
 export const videoSpeedConfigs = [
     {
@@ -90,6 +90,27 @@ export const videoSpeedConfigs = [
             listenElement: '.swiper-slide-active'
         },
         siteName:"KuaiShou",
+        defaultConfig: {
+            step: 0.1,
+            minRate: 0.1,
+            maxRate: 16.0,
+            lastRate: 1.0,
+            rememberSpeed: true
+        }
+    },
+    {
+        matches: ['https://x.com/*', 'https://twitter.com/*'],
+        storageKey: 'local:twitter_video_speed_config',
+        selectors: {
+            rateElement: '[data-video-speed-wheel="twitter-speed-display"]',
+            videoElement: '[data-testid="videoComponent"] video',
+            extraElement: '[data-video-speed-wheel="twitter-speed-text"]',
+            listenElement: ''
+        },
+        siteName:"Twitter",
+        ui_create_func: createTwitterSpeedDisplay,
+        multiTargets: true,
+        uiPollInterval: 150,
         defaultConfig: {
             step: 0.1,
             minRate: 0.1,

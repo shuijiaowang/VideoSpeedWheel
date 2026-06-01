@@ -22,7 +22,10 @@ export default defineContentScript({
         // 初始化DOM（处理多参数场景）
         const { rateElement, videoElement, extraElement ,listenElement } = matchedConfig.selectors;
         const initDom = () => {
-            controller.init(rateElement, videoElement, extraElement,listenElement,matchedConfig.ui_create_func);
+            controller.init(rateElement, videoElement, extraElement, listenElement, matchedConfig.ui_create_func, document, {
+                multiTargets: matchedConfig.multiTargets,
+                uiPollInterval: matchedConfig.uiPollInterval
+            });
         };
         initDom();
         // 监听SPA路由变化（通用逻辑）

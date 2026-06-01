@@ -16,9 +16,11 @@ export class VideoSpeedController {
 
         // 状态管理
         this.targetElement = null; //触发元素
+        this.targetElements = []; // 多视频场景下的触发元素
         this.videoElement = null; //视频元素
         this.videoElements = []; // 通用模式下存储所有视频元素
         this.textElement = null; // 倍速显示元素
+        this.textElements = []; // 多视频场景下的倍速显示元素
         this.config = null; // 最终生效配置
         //鼠标触发状态
         this.isHovering = false; //是否处于触发状态，此时滚轮可修改倍速,通用模式下始终为false
@@ -27,6 +29,7 @@ export class VideoSpeedController {
         this.keyInputTimer = null; // 输入延时定时器（防抖）
         this.KEY_INPUT_TIMEOUT = 1500; // 输入超时时间（ms），超时后确认输入
         this.videoObserver = null; // 监听动态添加的视频
+        this.uiPollTimer = null; // 轮询保活自定义UI
     }
 
     // 初始化配置/从本地读取配置（异步，需先调用这个方法再init DOM）
@@ -46,33 +49,121 @@ export class VideoSpeedController {
     getAllVideoElements() {
         return Array.from(document.querySelectorAll('video'));
     }
+
+    formatRate(rate) {
+        return `${Number(rate.toFixed(2))}x`;
+    }
+
+    syncTextDisplays(rate) {
+        const displayText = this.formatRate(rate);
+        const textElements = this.textElements.length ? this.textElements : [this.textElement].filter(Boolean);
+        textElements.forEach(textElement => {
+            textElement.textContent = displayText;
+        });
+    }
+
+    removeTargetEventListeners() {
+        const targetElements = this.targetElements.length ? this.targetElements : [this.targetElement].filter(Boolean);
+        targetElements.forEach(targetElement => {
+            targetElement.removeEventListener('mouseenter', this.handleMouseEnter);
+            targetElement.removeEventListener('mouseleave', this.handleMouseLeave);
+            targetElement.removeEventListener('wheel', this.handleWheel);
+        });
+    }
+
+    bindTargetEventListeners() {
+        this.targetElements.forEach(targetElement => {
+            targetElement.addEventListener('mouseenter', this.handleMouseEnter);
+            targetElement.addEventListener('mouseleave', this.handleMouseLeave);
+            targetElement.addEventListener('wheel', this.handleWheel);
+        });
+    }
+
+    isSameElements(oldElements, newElements) {
+        return oldElements.length === newElements.length
+            && oldElements.every((element, index) => element === newElements[index]);
+    }
+
+    rebindMultiElements(targetSelector, videoSelector, textSelector, root = document) {
+        const targetElements = targetSelector ? Array.from(root.querySelectorAll(targetSelector)) : [];
+        const videoElements = videoSelector ? Array.from(root.querySelectorAll(videoSelector)) : [];
+        const textElements = textSelector ? Array.from(root.querySelectorAll(textSelector)) : targetElements;
+
+        if (
+            this.isSameElements(this.targetElements, targetElements)
+            && this.isSameElements(this.videoElements, videoElements)
+            && this.isSameElements(this.textElements, textElements)
+        ) {
+            return;
+        }
+
+        this.removeTargetEventListeners();
+
+        this.targetElements = targetElements;
+        this.videoElements = videoElements;
+        this.textElements = textElements;
+        this.targetElement = targetElements[0] || null;
+        this.videoElement = videoElements[0] || null;
+        this.textElement = textElements[0] || this.targetElement;
+
+        this.bindTargetEventListeners();
+        if (this.config) {
+            this.syncTextDisplays(this.config.lastRate);
+        }
+    }
+
+    startUiPolling(targetSelector, videoSelector, textSelector, ui_create_func, root = document, interval = 250) {
+        if (this.uiPollTimer) {
+            clearInterval(this.uiPollTimer);
+        }
+
+        this.uiPollTimer = setInterval(() => {
+            if (typeof ui_create_func === 'function') {
+                ui_create_func(this.config?.lastRate || 1.0);
+            }
+            this.rebindMultiElements(targetSelector, videoSelector, textSelector, root);
+            if (this.config?.rememberSpeed && this.videoElements.length) {
+                this.updateAllVideoSpeed(this.config.lastRate, {save: false});
+            }
+        }, interval);
+    }
+
     // 通用模式：更新所有视频的倍速
-    updateAllVideoSpeed(rate) {
+    updateAllVideoSpeed(rate, options = {}) {
         if (!this.config) return;
+        const {save = true} = options;
         // newRate = Math.min(Math.max(newRate, this.config.minRate), this.config.maxRate);
         // 限制速率范围
         // const fixedRate = Number(Math.min(Math.max(rate, this.config.minRate), this.config.maxRate).toFixed(2));
-        const fixedRate = Number(Math.min(Math.max(rate, this.config.minRate), this.config.maxRate));
+        const fixedRate = Number(Math.min(Math.max(rate, this.config.minRate), this.config.maxRate).toFixed(2));
         // 更新所有视频
-        this.videoElements = this.getAllVideoElements();
+        if (this.storageKey.includes('general')) {
+            this.videoElements = this.getAllVideoElements();
+        } else if (!this.videoElements.length) {
+            this.videoElements = this.videoElement ? [this.videoElement] : this.getAllVideoElements();
+        }
         this.videoElements.forEach(video => {
             video.playbackRate = fixedRate;
         });
+        this.config.lastRate = fixedRate;
+        this.syncTextDisplays(fixedRate);
         // 保存记忆速率
-        if (this.config.rememberSpeed) {
-            this.config.lastRate = fixedRate;
+        if (save && this.config.rememberSpeed) {
             this.saveConfig();
         }
         return fixedRate;
     }
 
     // 鼠标进入目标元素
-    handleMouseEnter = async () => {
+    handleMouseEnter = async (event) => {
         if (this.storageKey.includes('general')) return; // 通用模式跳过
         // console.log("调试：鼠标悬浮触发状态") //
         await this.initConfig() //更新参数，可能被popup进行修改，这样就不用通信
         this.isHovering = true; //修改状态
-        this.targetElement.style.cursor = `n-resize`; //修改鼠标箭头样式作为提示
+        const targetElement = event?.currentTarget || this.targetElement;
+        if (targetElement) {
+            targetElement.style.cursor = `n-resize`; //修改鼠标箭头样式作为提示
+        }
     };
 
     // 鼠标离开目标元素：保存当前速率
@@ -81,9 +172,10 @@ export class VideoSpeedController {
         // console.log("调试：鼠标离开结束并存储数据")
         this.isHovering = false; //更新状态
         //这里暂时限制为两位数。
-        if (this.videoElement) {
-            const fixedRate = Number(this.videoElement.playbackRate.toFixed(2));
-            this.videoElement.playbackRate = fixedRate;
+        if (this.videoElement || this.videoElements.length) {
+            const currentRate = this.videoElement?.playbackRate || this.config.lastRate;
+            const fixedRate = Number(currentRate.toFixed(2));
+            this.updateAllVideoSpeed(fixedRate, {save: false});
             // 更新配置并保存
             this.config.lastRate = fixedRate;
             await this.saveConfig();
@@ -103,9 +195,7 @@ export class VideoSpeedController {
         newRate = Math.min(Math.max(newRate, this.config.minRate), this.config.maxRate);
         // 设置新的播放倍速（保留2位小数）
         const fixedRate = Number(newRate.toFixed(2));
-        this.videoElement.playbackRate = fixedRate;
-        // 更新倍速显示文本
-        this.textElement.textContent = `${fixedRate}x`; // 格式如：1.50x、0.80x
+        this.updateAllVideoSpeed(fixedRate, {save: false});
     };
 
     // 处理键盘按下事件（核心新增方法）
@@ -121,20 +211,18 @@ export class VideoSpeedController {
 
         // 1. 处理上下方向键调整倍速（模拟滚轮）
         if (key === 'ArrowUp' || key === 'ArrowDown') {
-            if (!this.videoElement || !this.config) return;
+            if (!this.config) return;
+            const hasTargetVideo = this.videoElement || this.videoElements.length || this.storageKey.includes('general');
+            if (!hasTargetVideo) return;
 
             const direction = key === 'ArrowUp' ? 1 : -1;
-            let newRate = this.videoElement.playbackRate + (this.config.step * direction);
+            let newRate = (this.videoElement?.playbackRate || this.config.lastRate) + (this.config.step * direction);
 
 
             // 特定平台：单视频调节
-            if (!this.storageKey.includes('general') && this.videoElement) {
-                newRate = this.videoElement.playbackRate + (this.config.step * direction);
-                const fixedRate = this.updateAllVideoSpeed(newRate);
-                this.videoElement.playbackRate = fixedRate;
-                if (this.textElement) {
-                    this.textElement.textContent = `${fixedRate}x`;
-                }
+            if (!this.storageKey.includes('general') && (this.videoElement || this.videoElements.length)) {
+                newRate = (this.videoElement?.playbackRate || this.config.lastRate) + (this.config.step * direction);
+                this.updateAllVideoSpeed(newRate);
             }
             // 通用模式：所有视频调节
             else if (this.storageKey.includes('general')) {
@@ -179,14 +267,8 @@ export class VideoSpeedController {
         }
 
         // 特定平台：单视频设置
-        if (!this.storageKey.includes('general') && this.videoElement) {
-            inputRate = Math.min(Math.max(inputRate, this.config.minRate), this.config.maxRate);
-            this.videoElement.playbackRate = inputRate;
-            if (this.textElement) {
-                this.textElement.textContent = `${inputRate}x`;
-            }
-            this.config.lastRate = inputRate;
-            this.saveConfig();
+        if (!this.storageKey.includes('general') && (this.videoElement || this.videoElements.length)) {
+            this.updateAllVideoSpeed(inputRate);
         }
         // 通用模式：所有视频设置
         else if (this.storageKey.includes('general')) {
@@ -201,7 +283,8 @@ export class VideoSpeedController {
         }
     };
     // 初始化DOM和事件监听（需先调用initConfig）
-    init(targetSelector, videoSelector = 'video', textSelector, listenElement, ui_create_func) {
+    init(targetSelector, videoSelector = 'video', textSelector, listenElement, ui_create_func, root = document, options = {}) {
+        const query = (selector) => (selector ? root.querySelector(selector) : null);
         // 通用模式初始化
         if (this.storageKey.includes('general')) {
             this.cleanup();
@@ -217,33 +300,47 @@ export class VideoSpeedController {
             return;
         }
 
-        if (typeof ui_create_func === 'function') { //如youtube，添加倍速元素
-            ui_create_func();
-        }
         if (!this.config) {
             throw new Error('请先调用 initConfig() 初始化配置');
         }
         this.cleanup(); // 清理旧监听器(鼠标/键盘)，并置空
-        this.targetElement = document.querySelector(targetSelector);
-        this.videoElement = document.querySelector(videoSelector);
+
+        if (typeof ui_create_func === 'function') { //如youtube，添加倍速元素
+            ui_create_func(this.config.lastRate);
+        }
+
+        if (options.multiTargets) {
+            this.rebindMultiElements(targetSelector, videoSelector, textSelector, root);
+            if (this.config.rememberSpeed) {
+                this.updateAllVideoSpeed(this.config.lastRate, {save: false});
+            }
+            window.addEventListener('keydown', this.handleKeydown);
+            if (options.uiPollInterval) {
+                this.startUiPolling(targetSelector, videoSelector, textSelector, ui_create_func, root, options.uiPollInterval);
+            }
+            return;
+        }
+
+        this.targetElement = query(targetSelector);
+        this.videoElement = query(videoSelector);
         this.textElement = this.targetElement //默认触发元素就是显示元素
         //显示数字的元素
         if (textSelector !== '') {
-            this.textElement = document.querySelector(textSelector); //如小红书的触发元素和显示元素不一致
+            this.textElement = query(textSelector); //如小红书的触发元素和显示元素不一致
         }
         //如快手的路由不变，切换视频时需要监听发生变化，重置init
         if (listenElement !== '') {
-            this.listen(targetSelector, videoSelector, textSelector, listenElement,ui_create_func)
+            this.listen(targetSelector, videoSelector, textSelector, listenElement, ui_create_func, root)
         }
         //三缺一，则延迟重试
         if (!this.targetElement || !this.videoElement ||!this.textElement) {
-            setTimeout(() => this.init(targetSelector, videoSelector, textSelector, listenElement), 1000);
+            setTimeout(() => this.init(targetSelector, videoSelector, textSelector, listenElement, ui_create_func, root), 1000);
             return;
         }
         // 应用记忆的速率，初始化倍速
         if (this.config.rememberSpeed) {
             this.videoElement.playbackRate = this.config.lastRate;
-            this.textElement.textContent = `${this.config.lastRate}x`
+            this.textElement.textContent = this.formatRate(this.config.lastRate)
         }
 
         // 绑定事件
@@ -279,14 +376,14 @@ export class VideoSpeedController {
             subtree: true
         });
     }
-    listen(targetSelector, videoSelector, textSelector, listenElement) {
+    listen(targetSelector, videoSelector, textSelector, listenElement, ui_create_func, root = document) {
         // listenElement的属性变化，一般是父级元素状态改为活跃
-        const targetElement = document.querySelector(listenElement);
+        const targetElement = root.querySelector(listenElement);
         if (targetElement) {
             const attrObserver = new MutationObserver((mutations) => {
                 // 只要属性变化就触发重新绑定
                 // console.log(`[测试] listenElement属性变化:`, mutations);
-                this.init(targetSelector, videoSelector, textSelector, listenElement);
+                this.init(targetSelector, videoSelector, textSelector, listenElement, ui_create_func, root);
             });
             // 监听目标元素的所有属性变化
             attrObserver.observe(targetElement, {attributes: true});
@@ -300,14 +397,18 @@ export class VideoSpeedController {
         this.config = {...this.config, ...newConfig};
         await this.saveConfig();
         // 同步更新视频速率（如果改了lastRate）
-        if (this.videoElement && newConfig.lastRate) {
-            this.videoElement.playbackRate = newConfig.lastRate;
+        if (newConfig.lastRate !== undefined) {
+            this.updateAllVideoSpeed(newConfig.lastRate, {save: false});
         }
     }
 
     // 清理监听器（适配通用模式）
     cleanup() {
         window.removeEventListener('keydown', this.handleKeydown);
+        if (this.uiPollTimer) {
+            clearInterval(this.uiPollTimer);
+            this.uiPollTimer = null;
+        }
         if (this.keyInputTimer) {
             clearTimeout(this.keyInputTimer);
             this.keyInputTimer = null;
@@ -319,14 +420,12 @@ export class VideoSpeedController {
             this.videoObserver = null;
         }
         // 特定平台清理
-        if (this.targetElement) {
-            this.targetElement.removeEventListener('mouseenter', this.handleMouseEnter);
-            this.targetElement.removeEventListener('mouseleave', this.handleMouseLeave);
-            this.targetElement.removeEventListener('wheel', this.handleWheel);
-        }
+        this.removeTargetEventListeners();
         this.targetElement = null;
+        this.targetElements = [];
         this.videoElement = null;
         this.textElement = null;
+        this.textElements = [];
         this.videoElements = [];
     }
 
