@@ -82,6 +82,10 @@ function isPointerOnOverlay(clientX, clientY) {
     );
 }
 
+function getWheelDirection(deltaY) {
+    return deltaY > 0 ? -1 : 1;
+}
+
 export class GeneralSpeedOverlay {
     constructor(controller) {
         this.controller = controller;
@@ -96,6 +100,7 @@ export class GeneralSpeedOverlay {
         this.repositionRafId = 0;
 
         this.handleDocumentMouseMove = this.handleDocumentMouseMove.bind(this);
+        this.handleDocumentWheel = this.handleDocumentWheel.bind(this);
         this.handleReposition = this.scheduleReposition.bind(this);
         this.handleOverlayMouseEnter = this.handleOverlayMouseEnter.bind(this);
         this.handleOverlayMouseLeave = this.handleOverlayMouseLeave.bind(this);
@@ -105,6 +110,7 @@ export class GeneralSpeedOverlay {
     start() {
         this.scheduleVideoScan(true);
         document.addEventListener('mousemove', this.handleDocumentMouseMove, {passive: true});
+        document.addEventListener('wheel', this.handleDocumentWheel, {capture: true, passive: false});
         window.addEventListener('scroll', this.handleReposition, true);
         window.addEventListener('resize', this.handleReposition, {passive: true});
         this.pollTimer = setInterval(() => this.scheduleVideoScan(), POLL_INTERVAL_MS);
@@ -112,6 +118,7 @@ export class GeneralSpeedOverlay {
 
     destroy() {
         document.removeEventListener('mousemove', this.handleDocumentMouseMove);
+        document.removeEventListener('wheel', this.handleDocumentWheel, true);
         window.removeEventListener('scroll', this.handleReposition, true);
         window.removeEventListener('resize', this.handleReposition);
         if (this.pollTimer) {
@@ -304,20 +311,23 @@ export class GeneralSpeedOverlay {
             return;
         }
 
-        let hitVideo = null;
-        for (const video of this.entries.keys()) {
-            if (!video.isConnected) continue;
-            if (isInHotZone(video, clientX, clientY)) {
-                hitVideo = video;
-                break;
-            }
-        }
+        const hitVideo = this.findVideoInHotZone(clientX, clientY);
 
         if (hitVideo) {
             this.setActiveVideo(hitVideo);
         } else if (this.activeVideo) {
             this.hideUnlessHovering();
         }
+    }
+
+    findVideoInHotZone(clientX, clientY) {
+        for (const video of this.entries.keys()) {
+            if (!video.isConnected) continue;
+            if (isInHotZone(video, clientX, clientY)) {
+                return video;
+            }
+        }
+        return null;
     }
 
     handleOverlayMouseEnter() {
@@ -335,8 +345,27 @@ export class GeneralSpeedOverlay {
         event.preventDefault();
         event.stopPropagation();
         if (!this.controller.config) return;
-        const direction = event.deltaY > 0 ? -1 : 1;
+        const direction = getWheelDirection(event.deltaY);
         this.controller.changeRateByStep(direction);
+    }
+
+    handleDocumentWheel(event) {
+        if (!this.controller.config) return;
+
+        const {clientX, clientY} = event;
+        const isOnOverlay = isPointerOnOverlay(clientX, clientY);
+        const hitVideo = this.findVideoInHotZone(clientX, clientY);
+        const shouldHandle = Boolean(isOnOverlay || hitVideo);
+
+        if (!shouldHandle) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (hitVideo) {
+            this.setActiveVideo(hitVideo);
+        }
+        this.controller.changeRateByStep(getWheelDirection(event.deltaY));
     }
 
     updateAllTexts(rate) {
