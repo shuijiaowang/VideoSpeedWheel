@@ -168,6 +168,14 @@ export function getHostnameFromUrl(url) {
     }
 }
 
+/** 通用模式按域名独立存储；已适配站点仍用各自 storageKey */
+export function getStorageKey(config, hostname) {
+    if (config?.siteName === 'General' && hostname) {
+        return `local:general_video_speed_config:${hostname}`;
+    }
+    return config?.storageKey ?? '';
+}
+
 export async function isSiteDisabled(hostname) {
     if (!hostname) return false;
     const list = await disabledSitesItem.getValue();

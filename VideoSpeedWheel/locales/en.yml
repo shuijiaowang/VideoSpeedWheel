@@ -55,3 +55,18 @@ message:
   noMatchedSite: This page is not a supported video site, configuration will not take effect
   siteDisabled: Disabled on 【{site}】. Refresh the page to apply.
   siteEnabled: Re-enabled on 【{site}】. Refresh the page to apply.
+
+# Info / support panel (ExtensionSupportPanel)
+supportPanel:
+  title: About & Support
+  instructionsTitle: How to Use
+  donationTitle: Support the Author
+  donationTip: Thank you! Scan the QR code or open the link below.
+  linksTitle: Links
+  openLink: Open link
+  donation:
+    wechat: WeChat
+    alipay: Alipay
+    kofi: Ko-fi
+  links:
+    website: Official Website

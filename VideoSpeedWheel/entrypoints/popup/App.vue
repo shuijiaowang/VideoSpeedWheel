@@ -3,13 +3,15 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import {
   getHostnameFromUrl,
   getMatchedConfig,
+  getStorageKey,
   isSiteDisabled,
   setSiteDisabled,
 } from "@/core/VideoSpeedConfig.js";
 import { i18n } from '#i18n';
-const t = i18n.t; // 简化i18n调用
+import ExtensionSupportPanel from '@/components/ExtensionSupportPanel.vue';
+import { extensionSupportConfig } from '@/config/extensionSupport.config';
+const t = i18n.t;
 
-// 全局默认配置
 const DEFAULT_CONFIG = {
   step: 0.1,
   minRate: 0.25,
@@ -18,7 +20,6 @@ const DEFAULT_CONFIG = {
   lastRate: 1.0,
 };
 
-// 响应式数据
 const configForm = ref({ ...DEFAULT_CONFIG });
 const message = ref('');
 const messageType = ref('');
@@ -29,7 +30,12 @@ const isSiteMatched = ref(true);
 const siteDisabled = ref(false);
 const canUseConfig = computed(() => isSiteMatched.value && !siteDisabled.value);
 
-// 加载配置
+const siteStatus = computed(() => {
+  if (!isSiteMatched.value) return 'unsupported';
+  if (siteDisabled.value) return 'disabled';
+  return 'active';
+});
+
 const loadConfig = async () => {
   try {
     const [activeTab] = await browser.tabs.query({
@@ -63,7 +69,7 @@ const loadConfig = async () => {
       showMessage(t('message.siteDisabled', { site: currentSite.value }), 'info');
       return;
     }
-    speedConfigItem.value = storage.defineItem(matchedConfig.storageKey, {
+    speedConfigItem.value = storage.defineItem(getStorageKey(matchedConfig, hostname), {
       init: () => ({ ...DEFAULT_CONFIG, ...matchedConfig.defaultConfig }),
     });
     const savedConfig = await speedConfigItem.value.getValue();
@@ -77,9 +83,7 @@ const loadConfig = async () => {
   }
 };
 
-// 保存配置
-const onSiteDisabledChange = async (event) => {
-  const disabled = event.target.checked;
+const onSiteDisabledChange = async (disabled) => {
   if (!currentHostname.value) return;
 
   try {
@@ -95,7 +99,6 @@ const onSiteDisabledChange = async (event) => {
       await loadConfig();
     }
   } catch (err) {
-    event.target.checked = !disabled;
     showMessage(t('message.saveFail'), 'error');
     console.error('更新站点禁用状态失败:', err);
   }
@@ -108,7 +111,6 @@ const saveConfig = async () => {
       return;
     }
 
-    // 合法性校验
     if (configForm.value.minRate >= configForm.value.maxRate) {
       showMessage(t('message.minGtMax'), 'error');
       return;
@@ -136,7 +138,6 @@ const saveConfig = async () => {
   }
 };
 
-// 重置配置
 const resetConfig = () => {
   const matchedConfig = getMatchedConfig();
   if (matchedConfig) {
@@ -147,7 +148,6 @@ const resetConfig = () => {
   saveConfig();
 };
 
-// 提示消息封装
 const showMessage = (text, type) => {
   message.value = text;
   messageType.value = type;
@@ -157,7 +157,6 @@ const showMessage = (text, type) => {
   }, 3000);
 };
 
-// 生命周期
 onMounted(() => {
   loadConfig();
 });
@@ -168,248 +167,495 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="popup-container">
-    <!-- 站点信息 -->
-    <div class="site-info">
-      <h4>{{ t('siteInfo.currentSite') }}：{{ currentSite }}</h4>
-      <p v-if="!isSiteMatched" class="warn-text">
-        {{ t('siteInfo.noSupport') }}
-      </p>
-      <p v-else-if="siteDisabled" class="warn-text">
-        {{ t('siteInfo.disabledHint') }}
-      </p>
-      <div v-if="currentHostname" class="form-item switch-item site-disable-item">
-        <label>{{ t('form.disableOnSite.label') }}：</label>
-        <input
-          type="checkbox"
-          :checked="siteDisabled"
-          @change="onSiteDisabledChange"
-        />
+  <div class="popup">
+    <header class="popup-header">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </span>
+        <span class="brand-name">{{ t('extName') }}</span>
       </div>
+      <div class="site-badge" :class="siteStatus">
+        <span class="status-dot" />
+        <span class="site-host">{{ currentSite }}</span>
+      </div>
+    </header>
+
+    <div
+      v-if="!isSiteMatched || siteDisabled"
+      class="alert-banner"
+      :class="siteDisabled ? 'warn' : 'info'"
+    >
+      <span v-if="!isSiteMatched">{{ t('siteInfo.noSupport') }}</span>
+      <span v-else>{{ t('siteInfo.disabledHint') }}</span>
     </div>
 
-    <!-- 配置面板 -->
-    <div class="config-panel" :class="{ disabled: !canUseConfig }">
-      <h3>{{ t('configPanel.title') }}</h3>
+    <section v-if="currentHostname" class="card toggle-card">
+      <label class="toggle-row">
+        <span class="toggle-label">{{ t('form.disableOnSite.label') }}</span>
+        <span class="toggle">
+          <input
+            type="checkbox"
+            :checked="siteDisabled"
+            @change="onSiteDisabledChange($event.target.checked)"
+          />
+          <span class="toggle-track" />
+        </span>
+      </label>
+    </section>
 
-      <!-- 滚轮调节步长 -->
-      <div class="form-item">
-        <label>{{ t('form.step.label') }}：</label>
+    <section class="card config-card" :class="{ disabled: !canUseConfig }">
+      <h2 class="section-title">{{ t('configPanel.title') }}</h2>
+
+      <div class="field">
+        <label class="field-label" for="step-input">{{ t('form.step.label') }}</label>
         <input
-            type="number"
-            step="0.05"
-            v-model.number="configForm.step"
-            :placeholder="t('form.step.placeholder')"
-            :disabled="!canUseConfig"
+          id="step-input"
+          type="number"
+          step="0.05"
+          v-model.number="configForm.step"
+          :placeholder="t('form.step.placeholder')"
+          :disabled="!canUseConfig"
+          class="field-input"
         />
-        <small class="form-tip">{{ t('form.step.tip') }}</small>
+        <p class="field-hint">{{ t('form.step.tip') }}</p>
       </div>
 
-      <!-- 最小/最大速率 -->
-      <div class="form-row">
-        <div class="form-item">
-          <label>{{ t('form.minRate.label') }}：</label>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="min-rate">{{ t('form.minRate.label') }}</label>
           <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              max="16.0"
-              v-model.number="configForm.minRate"
-              :placeholder="t('form.minRate.placeholder')"
-              :disabled="!canUseConfig"
+            id="min-rate"
+            type="number"
+            step="0.1"
+            min="0.1"
+            max="16.0"
+            v-model.number="configForm.minRate"
+            :placeholder="t('form.minRate.placeholder')"
+            :disabled="!canUseConfig"
+            class="field-input"
           />
         </div>
-        <div class="form-item">
-          <label>{{ t('form.maxRate.label') }}：</label>
+        <div class="field">
+          <label class="field-label" for="max-rate">{{ t('form.maxRate.label') }}</label>
           <input
-              type="number"
-              step="0.1"
-              min="0.25"
-              max="32.0"
-              v-model.number="configForm.maxRate"
-              :placeholder="t('form.maxRate.placeholder')"
-              :disabled="!canUseConfig"
+            id="max-rate"
+            type="number"
+            step="0.1"
+            min="0.25"
+            max="32.0"
+            v-model.number="configForm.maxRate"
+            :placeholder="t('form.maxRate.placeholder')"
+            :disabled="!canUseConfig"
+            class="field-input"
           />
         </div>
       </div>
 
-      <!-- 速率记忆 -->
-      <div class="form-item switch-item">
-        <label>{{ t('form.rememberSpeed.label') }}：</label>
-        <input
+      <label class="toggle-row">
+        <span class="toggle-label">{{ t('form.rememberSpeed.label') }}</span>
+        <span class="toggle">
+          <input
             type="checkbox"
             v-model="configForm.rememberSpeed"
             :disabled="!canUseConfig"
-        />
-      </div>
-      <div class="form-item" v-if="configForm.rememberSpeed">
-        <label>{{ t('form.lastRate.label') }}：</label>
+          />
+          <span class="toggle-track" />
+        </span>
+      </label>
+
+      <div v-if="configForm.rememberSpeed" class="field field-nested">
+        <label class="field-label" for="last-rate">{{ t('form.lastRate.label') }}</label>
         <input
-            type="number"
-            step="0.1"
-            :min="configForm.minRate"
-            :max="configForm.maxRate"
-            v-model.number="configForm.lastRate"
-            :placeholder="t('form.lastRate.placeholder')"
-            :disabled="!canUseConfig"
+          id="last-rate"
+          type="number"
+          step="0.1"
+          :min="configForm.minRate"
+          :max="configForm.maxRate"
+          v-model.number="configForm.lastRate"
+          :placeholder="t('form.lastRate.placeholder')"
+          :disabled="!canUseConfig"
+          class="field-input"
         />
       </div>
 
-      <!-- 操作按钮 -->
       <div class="btn-group">
-        <button @click="saveConfig" class="btn save" :disabled="!canUseConfig">
+        <button type="button" class="btn btn-primary" :disabled="!canUseConfig" @click="saveConfig">
           {{ t('button.save') }}
         </button>
-        <button @click="resetConfig" class="btn reset" :disabled="!canUseConfig">
+        <button type="button" class="btn btn-secondary" :disabled="!canUseConfig" @click="resetConfig">
           {{ t('button.reset') }}
         </button>
       </div>
+    </section>
 
-      <!-- 提示消息 -->
-      <div v-if="message" class="message" :class="messageType">
+    <ExtensionSupportPanel :config="extensionSupportConfig" />
+
+    <Transition name="toast">
+      <div v-if="message" class="toast" :class="messageType" role="status">
         {{ message }}
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
-/* 原有样式保持不变 */
-.site-info {
-  padding: 1em;
-  text-align: center;
-  border-bottom: 1px solid #eee;
-}
-.site-info h4 {
-  margin: 0;
-  color: #333;
-  font-size: 15px;
-}
-.warn-text {
-  color: #ff9800;
-  font-size: 12px;
-  margin: 0.5em 0 0 0;
-}
-.site-disable-item {
-  margin: 0.75em auto 0;
-  max-width: 280px;
-  padding: 0 0.5em;
-}
-.site-disable-item label {
-  font-size: 13px;
-  color: #666;
-}
-
-.popup-container {
+.popup {
   width: 380px;
-  padding: 0 1em;
-  box-sizing: border-box;
-}
-.config-panel {
-  margin-top: 0.5em;
-  padding: 1em;
-  border-top: 1px solid #eee;
-}
-.config-panel.disabled {
-  opacity: 0.6;
-  pointer-events: none;
-}
-.config-panel h3 {
-  text-align: center;
-  margin-bottom: 1.5em;
-  color: #333;
-  font-size: 16px;
-  margin-top: 0;
-}
-.form-item {
-  margin-bottom: 1em;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 0.5em;
+  gap: 10px;
 }
-.form-row {
+
+.popup-header {
   display: flex;
-  gap: 1em;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 2px;
 }
-.form-row .form-item {
-  flex: 1;
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.form-item label {
-  font-size: 14px;
-  color: #666;
+
+.brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--vsw-accent) 0%, #2dd4bf 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--vsw-accent-ring);
 }
-.form-item input {
-  padding: 0.5em;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  outline: none;
-  font-size: 14px;
+
+.brand-icon svg {
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
 }
-.form-item input:focus {
-  border-color: #42b883;
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--vsw-text);
 }
-.form-tip {
+
+.site-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--vsw-surface);
+  border: 1px solid var(--vsw-border);
+  box-shadow: var(--vsw-shadow);
+}
+
+.status-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vsw-text-muted);
+}
+
+.site-badge.active .status-dot {
+  background: var(--vsw-success);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2);
+}
+
+.site-badge.unsupported .status-dot {
+  background: var(--vsw-warn);
+}
+
+.site-badge.disabled .status-dot {
+  background: var(--vsw-danger);
+}
+
+.site-host {
   font-size: 12px;
-  color: #999;
-  margin-top: -0.3em;
+  font-weight: 500;
+  color: var(--vsw-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.switch-item {
-  flex-direction: row;
+
+.alert-banner {
+  padding: 10px 12px;
+  border-radius: var(--vsw-radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.alert-banner.info {
+  background: var(--vsw-info-bg);
+  color: var(--vsw-info);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+.alert-banner.warn {
+  background: var(--vsw-warn-bg);
+  color: var(--vsw-warn);
+  border: 1px solid rgba(217, 119, 6, 0.15);
+}
+
+.card {
+  background: var(--vsw-surface);
+  border: 1px solid var(--vsw-border);
+  border-radius: var(--vsw-radius);
+  box-shadow: var(--vsw-shadow);
+  padding: 14px 16px;
+}
+
+.toggle-card {
+  padding: 12px 16px;
+}
+
+.config-card.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.section-title {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vsw-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.field {
+  margin-bottom: 12px;
+}
+
+.field-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.field-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-nested {
+  margin-top: -4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--vsw-accent-soft);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vsw-text-secondary);
+}
+
+.field-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--vsw-border);
+  border-radius: var(--vsw-radius-sm);
+  background: var(--vsw-bg);
+  font-size: 14px;
+  color: var(--vsw-text);
+  transition: border-color var(--vsw-transition), box-shadow var(--vsw-transition),
+    background-color var(--vsw-transition);
+}
+
+.field-input:hover:not(:disabled) {
+  border-color: #cbd5e1;
+}
+
+.field-input:focus {
+  border-color: var(--vsw-border-focus);
+  background: var(--vsw-surface);
+  box-shadow: 0 0 0 3px var(--vsw-accent-ring);
+  outline: none;
+}
+
+.field-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--vsw-text-muted);
+  line-height: 1.4;
+}
+
+.toggle-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1em;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vsw-text-secondary);
+}
+
+.toggle {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  display: block;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color var(--vsw-transition);
+  cursor: pointer;
+}
+
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
+  transition: transform var(--vsw-transition);
+}
+
+.toggle input:checked + .toggle-track {
+  background: var(--vsw-accent);
+}
+
+.toggle input:checked + .toggle-track::after {
+  transform: translateX(18px);
+}
+
+.toggle input:disabled + .toggle-track {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle input:focus-visible + .toggle-track {
+  outline: 2px solid var(--vsw-border-focus);
+  outline-offset: 2px;
 }
 
 .btn-group {
   display: flex;
-  gap: 1em;
-  margin-top: 1.5em;
-}
-.btn {
-  flex: 1;
-  padding: 0.7em;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 14px;
-}
-.save {
-  background-color: #42b883;
-  color: white;
-}
-.save:hover:not(:disabled) {
-  background-color: #359469;
-}
-.reset {
-  background-color: #f5f5f5;
-  color: #333;
-}
-.reset:hover:not(:disabled) {
-  background-color: #e0e0e0;
-}
-.btn:disabled {
-  background-color: #ccc !important;
-  cursor: not-allowed;
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.message {
-  margin-top: 1em;
-  padding: 0.7em;
-  border-radius: 4px;
-  text-align: center;
+.btn {
+  flex: 1;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--vsw-radius-sm);
   font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--vsw-transition), transform 0.1s ease,
+    box-shadow var(--vsw-transition);
 }
-.success {
-  background-color: #e8f5e9;
-  color: #359469;
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
-.error {
-  background-color: #fee;
-  color: #e53935;
+
+.btn-primary {
+  background: var(--vsw-accent);
+  color: #fff;
+  box-shadow: 0 1px 2px var(--vsw-accent-ring);
 }
-.info {
-  background-color: #e3f2fd;
-  color: #2196f3;
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--vsw-accent-hover);
+}
+
+.btn-secondary {
+  background: var(--vsw-bg);
+  color: var(--vsw-text-secondary);
+  border: 1px solid var(--vsw-border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: var(--vsw-text);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.toast {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  padding: 10px 14px;
+  border-radius: var(--vsw-radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  box-shadow: var(--vsw-shadow-md);
+  z-index: 100;
+}
+
+.toast.success {
+  background: var(--vsw-success-bg);
+  color: var(--vsw-success);
+  border: 1px solid rgba(5, 150, 105, 0.2);
+}
+
+.toast.error {
+  background: var(--vsw-danger-bg);
+  color: var(--vsw-danger);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.toast.info {
+  background: var(--vsw-info-bg);
+  color: var(--vsw-info);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>

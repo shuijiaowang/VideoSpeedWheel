@@ -1,6 +1,6 @@
 
 import {VideoSpeedController} from "../core/VideoSpeedController.js";
-import {getHostnameFromUrl, getMatchedConfig, isSiteDisabled} from "../core/VideoSpeedConfig.js";
+import {getHostnameFromUrl, getMatchedConfig, getStorageKey, isSiteDisabled} from "../core/VideoSpeedConfig.js";
 
 export default defineContentScript({
     matches: ['<all_urls>'],
@@ -16,7 +16,7 @@ export default defineContentScript({
         // console.log(`[${matchedConfig.storageKey}] 倍速插件初始化`);
         // 初始化控制器
         const controller = new VideoSpeedController({
-            storageKey: matchedConfig.storageKey,
+            storageKey: getStorageKey(matchedConfig, hostname),
             defaultConfig: matchedConfig.defaultConfig
         });
         // 异步初始化配置

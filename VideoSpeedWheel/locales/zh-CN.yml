@@ -52,3 +52,18 @@ message:
   noMatchedSite: 当前页面不是支持的视频站点，配置将无法生效
   siteDisabled: 已禁止在【{site}】运行，请刷新页面
   siteEnabled: 已恢复在【{site}】运行，请刷新页面
+
+# 说明 / 赏赞 / 链接面板（ExtensionSupportPanel）
+supportPanel:
+  title: 说明与支持
+  instructionsTitle: 使用说明
+  donationTitle: 赏赞支持
+  donationTip: 感谢您的支持，扫码或点击链接即可
+  linksTitle: 相关链接
+  openLink: 打开链接
+  donation:
+    wechat: 微信
+    alipay: 支付宝
+    kofi: Ko-fi
+  links:
+    website: 官方网站
