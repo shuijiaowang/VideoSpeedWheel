@@ -40,18 +40,18 @@ button:
 
 # 提示消息
 message:
-  loadSuccess: 已加载【{site}】的配置
-  saveSuccess: 【{site}】配置保存成功！
+  loadSuccess: 已加载【$1】的配置
+  saveSuccess: 【$1】配置保存成功！
   saveFail: 保存配置失败
   loadFail: 加载配置失败
   noTabUrl: 获取当前标签页URL失败
   noSupportSave: 当前站点不支持配置保存
   minGtMax: 最小速率不能大于等于最大速率
   stepInvalid: 调节步长必须大于0
-  lastRateRange: 记忆速率需在 {min}~{max} 之间
+  lastRateRange: 记忆速率需在 $1~$2 之间
   noMatchedSite: 当前页面不是支持的视频站点，配置将无法生效
-  siteDisabled: 已禁止在【{site}】运行，请刷新页面
-  siteEnabled: 已恢复在【{site}】运行，请刷新页面
+  siteDisabled: 已禁止在【$1】运行，请刷新页面
+  siteEnabled: 已恢复在【$1】运行，请刷新页面
 
 # 说明 / 赏赞 / 链接面板（ExtensionSupportPanel）
 supportPanel:

@@ -66,7 +66,7 @@ const loadConfig = async () => {
 
     isSiteMatched.value = true;
     if (siteDisabled.value) {
-      showMessage(t('message.siteDisabled', { site: currentSite.value }), 'info');
+      showMessage(t('message.siteDisabled', [currentSite.value]), 'info');
       return;
     }
     speedConfigItem.value = storage.defineItem(getStorageKey(matchedConfig, hostname), {
@@ -76,7 +76,7 @@ const loadConfig = async () => {
     if (savedConfig) {
       configForm.value = { ...savedConfig };
     }
-    showMessage(t('message.loadSuccess', { site: currentSite.value }), 'success');
+    showMessage(t('message.loadSuccess', [currentSite.value]), 'success');
   } catch (err) {
     showMessage(t('message.loadFail'), 'error');
     console.error('加载配置失败:', err);
@@ -91,8 +91,8 @@ const onSiteDisabledChange = async (disabled) => {
     siteDisabled.value = disabled;
     showMessage(
       disabled
-        ? t('message.siteDisabled', { site: currentSite.value })
-        : t('message.siteEnabled', { site: currentSite.value }),
+        ? t('message.siteDisabled', [currentSite.value])
+        : t('message.siteEnabled', [currentSite.value]),
       disabled ? 'info' : 'success'
     );
     if (!disabled && isSiteMatched.value) {
@@ -123,15 +123,15 @@ const saveConfig = async () => {
         configForm.value.lastRate < configForm.value.minRate ||
         configForm.value.lastRate > configForm.value.maxRate
     ) {
-      showMessage(t('message.lastRateRange', {
-        min: configForm.value.minRate,
-        max: configForm.value.maxRate
-      }), 'error');
+      showMessage(t('message.lastRateRange', [
+        configForm.value.minRate,
+        configForm.value.maxRate,
+      ]), 'error');
       return;
     }
 
     await speedConfigItem.value.setValue(configForm.value);
-    showMessage(t('message.saveSuccess', { site: currentSite.value }), 'success');
+    showMessage(t('message.saveSuccess', [currentSite.value]), 'success');
   } catch (err) {
     showMessage(t('message.saveFail'), 'error');
     console.error('保存配置失败:', err);

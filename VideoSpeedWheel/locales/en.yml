@@ -43,18 +43,18 @@ button:
 
 # Prompt messages
 message:
-  loadSuccess: Loaded configuration for 【{site}】
-  saveSuccess: Configuration for 【{site}】 saved successfully!
+  loadSuccess: Loaded configuration for 【$1】
+  saveSuccess: Configuration for 【$1】 saved successfully!
   saveFail: Failed to save configuration
   loadFail: Failed to load configuration
   noTabUrl: Failed to get current tab URL
   noSupportSave: This site does not support configuration saving
   minGtMax: Minimum speed cannot be greater than or equal to maximum speed
   stepInvalid: Adjustment step must be greater than 0
-  lastRateRange: Remembered speed must be between {min} and {max}
+  lastRateRange: Remembered speed must be between $1 and $2
   noMatchedSite: This page is not a supported video site, configuration will not take effect
-  siteDisabled: Disabled on 【{site}】. Refresh the page to apply.
-  siteEnabled: Re-enabled on 【{site}】. Refresh the page to apply.
+  siteDisabled: Disabled on 【$1】. Refresh the page to apply.
+  siteEnabled: Re-enabled on 【$1】. Refresh the page to apply.
 
 # Info / support panel (ExtensionSupportPanel)
 supportPanel:
